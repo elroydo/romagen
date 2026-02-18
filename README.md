@@ -1,10 +1,27 @@
-# 📊 Rota Matrix Generator
+# Romagen
 
-This is a standalone, single-file HTML application built with Tailwind CSS and JavaScript.
+Live URL: https://elroydo.github.io/romagen/
 
-It processes raw RotaCloud shift data from a CSV file (and optionally, a separate leave/holiday file) and converts it into a standardised weekly matrix for easier review and analysis. All processing is done client-side in the browser.
+Romagen is a simple browser tool to:
 
-## How to Use
-1.  Drop your main shifts CSV file into the designated box.
-2.  (Optional) Drop your leave/holiday CSV file.
-3.  Click **Process** and then **Download XLSX**.
+- build a weekly rota matrix from shifts (+ optional leave)
+- enrich pasted IDs against that matrix
+- export results to XLSX
+
+## Quick Use
+
+1. **Process**
+   - Upload shifts CSV (optional leave CSV)
+   - Click **Process Matrix**
+   - Review/download matrix
+
+2. **Enrich**
+   - Use processed matrix or upload one
+   - Paste input and click **Parse Input**
+   - Click **Enrich**
+   - Download enrich XLSX
+
+## Notes
+
+- Runs fully in-browser (no backend).
+- Light/dark mode supported.
