@@ -3,219 +3,384 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rota Matrix Generator • CSV → Weekly Matrix (XLSX)</title>
-  
-  <!-- FIX 2: No-flash theme bootstrap -->
+  <title>Romagen: Rota Matrix Generator • Simple Weekly Workflow</title>
+
+  <!-- No-flash theme bootstrap -->
   <script>
     try {
       const stored = localStorage.getItem('theme');
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (stored === 'dark' || (!stored && prefersDark)) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      if (stored === 'dark' || (!stored && prefersDark)) document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
     } catch {}
   </script>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // FIX 1: Set darkMode: 'class' to enable JavaScript toggling
     tailwind.config = {
       darkMode: 'class',
-      theme: { 
-        extend: { 
-          fontFamily: { 
-            sans: ["Inter","system-ui","-apple-system","Segoe UI","Roboto","Ubuntu","Cantarell","Noto Sans","Helvetica Neue","Arial","sans-serif"] 
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter","system-ui","-apple-system","Segoe UI","Roboto","Ubuntu","Cantarell","Noto Sans","Helvetica Neue","Arial","sans-serif"]
           }
         }
       }
     }
   </script>
+
   <style>
-    /* Dark Mode Toggle Icon (Moon/Sun) */
-    .icon-toggle { width: 20px; height: 20px; cursor: pointer; }
-    
-    /* Dropzone Styling for both light and dark mode */
-    .dropzone.dragover { 
-      border-color: rgb(59 130 246); 
-      background: rgb(239 246 255); 
-    }
-    .dark .dropzone.dragover { 
-      border-color: rgb(147 197 253);
-      background: rgb(30 41 59);
-    }
-    .file-loaded { border-color: rgb(16 185 129); }
-    .dark .file-loaded { border-color: rgb(52 211 153); }
+    .icon-toggle{width:20px;height:20px;cursor:pointer}
+    .dropzone.dragover{border-color:rgb(59 130 246);background:rgb(239 246 255)}
+    .dark .dropzone.dragover{border-color:rgb(147 197 253);background:rgb(30 41 59)}
+    .file-loaded{border-color:rgb(16 185 129)}
+    .dark .file-loaded{border-color:rgb(52 211 153)}
 
-    /* Style for scrollable log */
-    #log { 
-      max-height: 15rem;
-      overflow-y: auto;
-      padding-right: 0.5rem;
-      min-height: 2rem;
-    }
-    /* Style for empty log state (Light mode) */
-    #log:empty:before {
-        content: 'No activity yet. Load your shifts to begin.';
-        color: #94a3b8;
-        font-style: italic;
-    }
-    /* Style for empty log state (Dark mode) */
-    .dark #log:empty:before {
-        content: 'No activity yet. Load your shifts to begin.';
-        color: #64748b;
-    }
+    #log{max-height:16rem;overflow-y:auto;padding-right:.5rem;min-height:2.5rem}
+    #log:empty:before{content:'No activity yet. Load your shifts to begin.';color:#94a3b8;font-style:italic}
+    .dark #log:empty:before{content:'No activity yet. Load your shifts to begin.';color:#94a3b8}
 
-    /* Custom Toggle Switch Styles */
-    .dot {
-        box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
-    }
-    /* Change background color when checked */
-    input:checked + .block { 
-        background-color: rgb(37 99 235) !important; /* blue-600 */
-    } 
-    /* Move dot when checked */
-    input:checked ~ .dot { 
-        transform: translateX(100%); 
-        background-color: #ffffff !important; /* White dot when active */
-    }
+    .dot{box-shadow:0 0 2px rgba(0,0,0,.2)}
+    input:checked + .block{background-color:rgb(37 99 235)!important}
+    input:checked ~ .dot{transform:translateX(100%);background-color:#fff!important}
+
+    .seg-btn{transition:all .15s ease}
+    .seg-btn[aria-selected="true"]{background:rgb(15 23 42);color:white}
+    .dark .seg-btn[aria-selected="true"]{background:white;color:rgb(15 23 42)}
+
+    .result-seg-btn{transition:all .15s ease;border-radius:.625rem}
+    .result-seg-btn[aria-selected="true"]{background:rgb(15 23 42);border-color:rgb(15 23 42);color:white}
+    .result-seg-btn[aria-selected="false"]{background:rgb(255 255 255);border:1px solid rgb(203 213 225);color:rgb(15 23 42)}
+    .result-seg-btn[aria-selected="false"]:hover{background:rgb(241 245 249)}
+    .dark .result-seg-btn[aria-selected="false"]{background:rgb(30 41 59);border:1px solid rgb(71 85 105);color:rgb(241 245 249)}
+    .dark .result-seg-btn[aria-selected="false"]:hover{background:rgb(51 65 85)}
+    .dark .result-seg-btn[aria-selected="true"]{background:white;border-color:white;color:rgb(15 23 42)}
+
+    .tab-btn{transition:all .15s ease;border-radius:.75rem;border:1px solid transparent;width:100%}
+    .tab-btn:not(.active){background-color:transparent;border-color:rgb(203 213 225)}
+    .dark .tab-btn:not(.active){border-color:rgb(51 65 85)}
+    .tab-btn.active{background-color:white;border-color:rgb(203 213 225);color:rgb(15 23 42);box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+    .dark .tab-btn.active{background-color:rgb(30 41 59);border-color:rgb(51 65 85);color:rgb(226 232 240)}
+
+    .log-line.info{color:inherit}
+    .log-line.warn{color:#b45309}
+    .log-line.error{color:#b91c1c}
+    .dark .log-line.warn{color:#fbbf24}
+    .dark .log-line.error{color:#fca5a5}
   </style>
 </head>
+
 <body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-50 transition-colors duration-300">
-  <div class="max-w-4xl mx-auto px-4 py-8">
-    <header class="mb-6 flex justify-between items-start">
+  <div class="max-w-5xl mx-auto px-4 py-8">
+
+    <header class="mb-6 flex justify-between items-start gap-4">
       <div>
-        <h1 class="text-3xl font-bold tracking-tight">Rota Matrix Generator</h1>
-        <p class="text-slate-600 dark:text-slate-400 mt-1">Convert raw shift data into a normalised, weekly matrix.</p>
+        <h1 class="text-3xl font-bold tracking-tight">Romagen</h1>
+        <p class="text-slate-600 dark:text-slate-400 mt-1">Rota Matrix Generator and Enricher. Build a weekly matrix from shifts, then enrich it with your pasted employee IDs.</p>
       </div>
-      
-      <!-- Dark Mode Toggle -->
-      <button id="darkModeToggle" class="p-2 rounded-full text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors duration-300" aria-label="Toggle dark mode">
-        <!-- Sun (Light Mode) Icon -->
-        <svg id="sunIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-toggle"><path d="M12 2.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75ZM7.051 6.829a.75.75 0 0 0-1.06 1.06l1.59 1.59a.75.75 0 0 0 1.06-1.06l-1.59-1.59ZM16.95 6.829l1.59 1.59a.75.75 0 0 0 1.06-1.06l-1.59-1.59a.75.75 0 0 0-1.06 1.06ZM12 5.25a6.75 6.75 0 1 0 6.75 6.75A6.75 6.75 0 0 0 12 5.25ZM20.25 12a.75.75 0 0 1-.75.75h-2.25a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75ZM3.75 12a.75.75 0 0 1 .75-.75h2.25a.75.75 0 0 1 0 1.5H4.5a.75.75 0 0 1-.75-.75ZM16.95 17.171a.75.75 0 0 0 1.06 1.06l1.59-1.59a.75.75 0 0 0-1.06-1.06l-1.59 1.59ZM7.051 17.171l1.59 1.59a.75.75 0 0 0 1.06-1.06l-1.59-1.59a.75.75 0 0 0-1.06 1.06ZM12 18.75a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0v-2.25a.75.75 0 0 1 .75-.75Z"/></svg>
-        <!-- Moon (Dark Mode) Icon - Remains hidden by default -->
-        <svg id="moonIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-toggle hidden"><path fill-rule="evenodd" d="M9.52 2.379a.75.75 0 0 1 .531.06C10.66 2.872 12 4.316 12 6c0 1.942-1.332 3.738-2.986 4.498A6.807 6.807 0 0 0 8 18a6.794 6.794 0 0 0 5.488 4.498A7.5 7.5 0 0 1 12 22.5c-3.12 0-6.062-1.464-8.086-3.864A10.51 10.51 0 0 1 10.5 4.5c1.455 0 2.86.377 4.123 1.071a.75.75 0 0 1 .06.531Z" clip-rule="evenodd" /></svg>
-      </button>
+
+      <div class="flex items-center gap-2">
+        <button id="darkModeToggle" class="p-2 rounded-full text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors duration-300" aria-label="Toggle dark mode">
+          <svg id="sunIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-toggle"><path d="M12 2.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75ZM7.051 6.829a.75.75 0 0 0-1.06 1.06l1.59 1.59a.75.75 0 0 0 1.06-1.06l-1.59-1.59ZM16.95 6.829l1.59 1.59a.75.75 0 0 0 1.06-1.06l-1.59-1.59a.75.75 0 0 0-1.06 1.06ZM12 5.25a6.75 6.75 0 1 0 6.75 6.75A6.75 6.75 0 0 0 12 5.25ZM20.25 12a.75.75 0 0 1-.75.75h-2.25a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75ZM3.75 12a.75.75 0 0 1 .75-.75h2.25a.75.75 0 0 1 0 1.5H4.5a.75.75 0 0 1-.75-.75ZM16.95 17.171a.75.75 0 0 0 1.06 1.06l1.59-1.59a.75.75 0 0 0-1.06-1.06l-1.59 1.59ZM7.051 17.171l1.59 1.59a.75.75 0 0 0 1.06-1.06l-1.59-1.59a.75.75 0 0 0-1.06 1.06ZM12 18.75a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0v-2.25a.75.75 0 0 1 .75-.75Z"/></svg>
+          <svg id="moonIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-toggle hidden"><path fill-rule="evenodd" d="M9.52 2.379a.75.75 0 0 1 .531.06C10.66 2.872 12 4.316 12 6c0 1.942-1.332 3.738-2.986 4.498A6.807 6.807 0 0 0 8 18a6.794 6.794 0 0 0 5.488 4.498A7.5 7.5 0 0 1 12 22.5c-3.12 0-6.062-1.464-8.086-3.864A10.51 10.51 0 0 1 10.5 4.5c1.455 0 2.86.377 4.123 1.071a.75.75 0 0 1 .06.531Z" clip-rule="evenodd"/></svg>
+        </button>
+      </div>
     </header>
 
-    <section class="space-y-6">
+    <!-- Stepper -->
+    <div class="inline-flex rounded-2xl bg-white border border-slate-200 p-1 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+      <button id="segLoad" class="seg-btn px-4 py-2 rounded-xl text-sm font-medium" aria-selected="true">1. Process</button>
+      <button id="segEnrich" class="seg-btn px-4 py-2 rounded-xl text-sm font-medium" aria-selected="false">2. Enrich</button>
+    </div>
 
-      <!-- Main CSV Drop Zone -->
-      <div id="drop" class="dropzone rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition duration-150 dark:bg-slate-800 dark:border-slate-700 dark:shadow-lg">
-        <div class="flex items-start gap-4">
-          <div class="shrink-0 rounded-xl bg-slate-100 p-3 mt-1 dark:bg-slate-700">
-            <!-- Clock/Time Icon -->
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-slate-500 dark:text-slate-400"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v5.25A.75.75 0 0 1 12 8.25a.75.75 0 0 1-.75-.75V3a.75.75 0 0 1 .75-.75ZM18.575 7.601a.75.75 0 0 0-.75-1.299 10.5 10.5 0 0 0-10.749 0 .75.75 0 0 0-.75 1.299 12 12 0 1 0 11.249 0Z" clip-rule="evenodd" /></svg>
+    <section class="mt-6 space-y-6">
+
+      <!-- LOAD STEP -->
+      <div id="stepLoad" class="space-y-6">
+
+        <div class="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm space-y-5 dark:bg-slate-800 dark:border-slate-700">
+          <div class="mb-5">
+            <h2 class="text-lg font-semibold">Process (build matrix)</h2>
+            <p class="text-sm text-slate-600 dark:text-slate-400">Load your weekly files, set options, process once, then review the matrix.</p>
           </div>
-          <div class="grow">
-            <p class="font-medium">Drop main shifts CSV here</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">or</p>
-            <label class="inline-flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:underline dark:text-blue-400" id="fileLabel">
-              <input id="fileInput" type="file" accept=".csv" class="hidden" />
-              <span>Select the shifts file</span>
-            </label>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">Expected import headers: <span class="font-medium">Employee ID</span>, Employee, Group, Day, Date, Start Time, End Time, ...</p>
-            
-            <!-- File Status & Clear Button -->
-            <div id="mainFileStatusWrap" class="flex items-center gap-2 mt-2 hidden">
-              <p id="mainFileStatus" class="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 truncate"></p>
-              <button id="clearMainBtn" class="text-xs text-red-500 hover:text-red-700 font-medium whitespace-nowrap dark:text-red-400 dark:hover:text-red-600">Clear</button>
+
+        <div id="drop" class="dropzone rounded-2xl border border-slate-200 bg-slate-50 p-6 transition duration-150 dark:bg-slate-900 dark:border-slate-700">
+          <div class="flex items-start gap-4">
+            <div class="grow">
+              <p class="font-medium">Main shifts file</p>
+              <p class="text-sm text-slate-700 dark:text-slate-300">Drop your main shifts CSV</p>
+              <label class="inline-flex items-center gap-2 mt-1 cursor-pointer px-3 py-1.5 rounded-xl bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700 mt-3" id="fileLabel">
+                <input id="fileInput" type="file" accept=".csv" class="hidden" />
+                <span>Select shifts file</span>
+              </label>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">Expected import headers: <span class="font-medium">Employee ID</span>, Employee, Group, Day, Date, Start Time, End Time, ...</p>
+
+              <div id="mainFileStatusWrap" class="flex items-center gap-2 mt-2 hidden">
+                <p id="mainFileStatus" class="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 truncate"></p>
+                <button id="clearMainBtn" class="text-xs text-red-500 hover:text-red-700 font-medium whitespace-nowrap dark:text-red-400 dark:hover:text-red-300">Clear</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Leave CSV Drop Zone -->
-      <div id="leaveDrop" class="dropzone rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition duration-150 dark:bg-slate-800 dark:border-slate-700 dark:shadow-lg">
-        <div class="flex items-start gap-4">
-          <div class="shrink-0 rounded-xl bg-slate-100 p-3 mt-1 dark:bg-slate-700">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-slate-500 dark:text-slate-400"><path d="M12 2.25a9.75 9.75 0 1 0 9.75 9.75A9.761 9.761 0 0 0 12 2.25ZM.75 5.25a.75.75 0 1 0-1.5 0v5.25c0 .414.336.75.75.75h4.5a.75.75 0 1 0 0-1.5h-3.75Z"/></svg>
-          </div>
-          <div class="grow">
-            <p class="font-medium">Optional leave/holiday CSV for the same week</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">or</p>
-            <label class="inline-flex items-center gap-2 mt-1 cursor-pointer text-blue-600 hover:underline dark:text-blue-400" id="leaveLabel">
-              <input id="leaveInput" type="file" accept=".csv" class="hidden" />
-              <span>Select a leave file</span>
-            </label>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">
-              Example headers: Employee ID, Employee, <span class="font-bold">Start Date</span>, <span class="font-bold">End Date</span>, Type.
-            </p>
-            
-            <!-- Leave Status & Clear Button -->
-            <div id="leaveFileStatusWrap" class="flex items-center gap-2 mt-2 hidden">
-              <p id="leaveFileStatus" class="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 truncate"></p>
-              <button id="clearLeaveBtn" class="text-xs text-red-500 hover:text-red-700 font-medium whitespace-nowrap dark:text-red-400 dark:hover:text-red-600">Clear</button>
+        <div id="leaveDrop" class="dropzone rounded-2xl border border-slate-200 bg-slate-50 p-6 transition duration-150 dark:bg-slate-900 dark:border-slate-700">
+          <div class="flex items-start gap-4">
+            <div class="grow">
+              <p class="font-medium">Leave / holiday file (optional)</p>
+              <p class="text-sm text-slate-700 dark:text-slate-300">Upload leave for the same week as shifts</p>
+              <label class="inline-flex items-center gap-2 mt-1 cursor-pointer px-3 py-1.5 rounded-xl bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700 mt-3" id="leaveLabel">
+                <input id="leaveInput" type="file" accept=".csv" class="hidden" />
+                <span>Select leave file</span>
+              </label>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">Example headers: Employee ID, Employee, <span class="font-semibold">Start Date</span>, <span class="font-semibold">End Date</span>, Type.</p>
+
+              <div id="leaveFileStatusWrap" class="flex items-center gap-2 mt-2 hidden">
+                <p id="leaveFileStatus" class="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 truncate"></p>
+                <button id="clearLeaveBtn" class="text-xs text-red-500 hover:text-red-700 font-medium whitespace-nowrap dark:text-red-400 dark:hover:text-red-300">Clear</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Options -->
-      <div class="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-        <div class="flex flex-col gap-5">
-          
-          <!-- Normalization Toggle -->
-          <label for="normalizeToggle" class="flex items-center cursor-pointer select-none justify-between">
-            <span class="text-sm text-slate-800 dark:text-slate-200">Normalize times ending in <span class="font-mono">:01</span> to <span class="font-mono">:00</span></span>
-            <div class="relative">
+        <div class="rounded-2xl border border-slate-200 p-5 bg-slate-50 dark:bg-slate-900 dark:border-slate-700">
+          <div class="mb-4">
+            <h3 class="text-sm font-semibold">Processing Options</h3>
+          </div>
+          <div class="flex flex-col gap-5">
+            <label for="normalizeToggle" class="flex items-center cursor-pointer select-none justify-between">
+              <span class="text-sm text-slate-800 dark:text-slate-200">Normalize times ending in <span class="font-mono">:01</span> to <span class="font-mono">:00</span></span>
+              <div class="relative">
                 <input id="normalizeToggle" type="checkbox" class="sr-only" checked>
-                <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200 block"></div>
-                <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-400 w-4 h-4 rounded-full transition-transform duration-200"></div>
-            </div>
-          </label>
-          
-          <!-- Empty Cell Fill Toggle -->
-          <label for="offToggle" class="flex items-center cursor-pointer select-none justify-between">
-            <span class="text-sm text-slate-800 dark:text-slate-200">Fill empty shift cells (for staff with shifts) with <span class="font-mono font-bold">'Off'</span></span>
-            <div class="relative">
-                <input id="offToggle" type="checkbox" class="sr-only">
-                <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200 block"></div>
-                <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-400 w-4 h-4 rounded-full transition-transform duration-200"></div>
-            </div>
-          </label>
-        </div>
-      </div>
+                <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+              </div>
+            </label>
 
-      <!-- Actions -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button id="processBtn" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-40 transition duration-150 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600">Process</button>
-        <button id="downloadBtn" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium disabled:opacity-40 transition duration-150 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600" disabled>Download XLSX</button>
-      </div>
-      
-      <!-- Log -->
-      <div id="logWrap">
-        <div class="rounded-xl bg-white border border-slate-200 p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="font-semibold">Log</h2>
-            <button id="clearLog" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">Clear</button>
+            <label for="offToggle" class="flex items-center cursor-pointer select-none justify-between">
+              <span class="text-sm text-slate-800 dark:text-slate-200">Fill empty shift cells (staff with shifts) with <span class="font-mono font-semibold">Off</span></span>
+              <div class="relative">
+                <input id="offToggle" type="checkbox" class="sr-only" checked>
+                <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+              </div>
+            </label>
           </div>
-          <pre id="log" class="text-[11px] whitespace-pre-wrap text-slate-700 dark:text-slate-300"></pre>
         </div>
-      </div>
 
-      <!-- Preview small -->
-      <div class="hidden" id="previewWrap">
-        <div class="rounded-xl bg-white border border-slate-200 p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="font-semibold">Preview</h2>
-            <span id="previewCount" class="text-xs text-slate-500 dark:text-slate-400"></span>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button id="processBtn" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-40 transition duration-150 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600">Process Matrix</button>
+          <button id="downloadMatrixBtn" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium disabled:opacity-40 transition duration-150 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600" disabled>Download Matrix</button>
+          <button id="toEnrichBtn" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-medium disabled:opacity-40 transition duration-150 hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200" disabled>Continue to Enrich</button>
+        </div>
+
+        </div>
+
+        <div id="loadPreviewCard" class="hidden rounded-2xl bg-white border border-slate-200 p-5 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-semibold">Matrix Preview</h2>
+              <p class="text-sm text-slate-600 dark:text-slate-400">All rows are shown below. Scroll inside the table to review.</p>
+              <p id="weekBanner" class="text-xs text-slate-500 dark:text-slate-500 mt-2"></p>
+            </div>
           </div>
-          <div class="overflow-x-auto">
+
+          <div class="mt-4 overflow-auto max-h-[55vh] border border-slate-200 rounded-xl dark:border-slate-700">
             <table class="min-w-full text-xs">
-              <thead id="prevThead" class="text-left text-slate-600 dark:text-slate-400"></thead>
+              <thead id="prevThead" class="text-left text-slate-600 dark:text-slate-400 sticky top-0 bg-slate-100 dark:bg-slate-900"></thead>
               <tbody id="prevTbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
             </table>
           </div>
+
+          <div class="flex items-center justify-between mt-2">
+            <span id="previewCount" class="text-xs text-slate-500 dark:text-slate-400"></span>
+          </div>
         </div>
       </div>
 
-      <!-- Footer -->
+      <!-- ENRICH STEP (FOMA MERGED) -->
+      <div id="stepEnrich" class="hidden space-y-6">
+
+        <div class="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+          <div class="space-y-3">
+            <div class="flex items-center">
+              <button id="toLoadFromEnrichBtn" class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-900 font-medium transition dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-50">Back</button>
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold">Enrich (match IDs to matrix)</h2>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Paste your WFM extract and match it against the selected matrix using FourthID.</p>
+              <p id="enrichActionHint" class="text-xs text-slate-500 dark:text-slate-400 mt-2">Select a matrix source, parse input, then run enrich.</p>
+            </div>
+          </div>
+
+          <div class="mt-5 rounded-2xl border border-slate-200 p-4 bg-slate-50 dark:bg-slate-900 dark:border-slate-700">
+            <div>
+              <p class="text-sm font-medium">Matrix Source</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Drop a matrix file, select one manually, or reuse the processed matrix from Process.</p>
+            </div>
+
+            <div id="matrixDrop" class="dropzone mt-3 rounded-2xl border border-slate-200 bg-white p-4 transition duration-150 dark:bg-slate-800 dark:border-slate-700">
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="text-sm text-slate-700 dark:text-slate-300">Drop matrix CSV/XLSX</p>
+                <span class="text-sm text-slate-500 dark:text-slate-400">or</span>
+                <label class="inline-flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-xl bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700">
+                  <input id="matrixUploadInput" type="file" accept=".csv,.xlsx,.xls" class="hidden" />
+                  <span>Select matrix file</span>
+                </label>
+                <button id="useGeneratedMatrixBtn" class="hidden px-3 py-1.5 rounded-xl bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700">Use processed matrix</button>
+              </div>
+
+              <div id="matrixUploadStatusWrap" class="mt-3 flex items-center gap-2 hidden">
+                <p id="matrixUploadStatus" class="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 truncate"></p>
+                <button id="clearMatrixUploadBtn" class="text-xs text-red-500 hover:text-red-700 font-medium whitespace-nowrap dark:text-red-400 dark:hover:text-red-300">Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="rounded-2xl border border-slate-200 p-4 bg-white dark:bg-slate-900 dark:border-slate-700 space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="text-sm font-semibold">Paste Input Data</label>
+                <span class="text-xs text-slate-500 dark:text-slate-400">Paste list or structured rows</span>
+              </div>
+              <textarea id="inputTextarea" class="w-full h-44 rounded-2xl p-3 border border-slate-200 bg-slate-50 font-mono text-sm focus:border-slate-400 dark:bg-slate-900 dark:border-slate-700" placeholder="Paste IDs or delimited rows here..."></textarea>
+
+              <div id="inputControlsGrid" class="grid grid-cols-1 md:grid-cols-1 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Input delimiter</label>
+                  <select id="inputDelimiter" class="w-full rounded-xl border border-slate-300 p-2 bg-white text-sm dark:bg-slate-900 dark:border-slate-700">
+                    <option value="auto" selected>Auto detect</option>
+                    <option value=",">Comma</option>
+                    <option value="\t">Tab</option>
+                    <option value=";">Semicolon</option>
+                    <option value="|">Pipe</option>
+                  </select>
+                </div>
+                <div id="inputFourthColWrap" class="hidden">
+                  <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">FourthID column</label>
+                  <select id="inputFourthCol" class="w-full rounded-xl border border-slate-300 p-2 bg-white text-sm dark:bg-slate-900 dark:border-slate-700">
+                    <option value="FourthID" selected>FourthID</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="mt-1 flex gap-2">
+                <button id="parseInputBtn" class="flex-1 px-4 py-2 rounded-xl bg-white text-slate-900 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-700">Parse Input</button>
+                <button id="clearInputBtn" class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 transition dark:bg-slate-700 dark:hover:bg-slate-600">Clear</button>
+              </div>
+
+              <div id="inputPreview" class="text-sm text-slate-600 dark:text-slate-400"></div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 p-4 bg-white dark:bg-slate-900 dark:border-slate-700 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold">Normalization Options</h3>
+                <button id="useMatrixAsLookup" class="text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200" title="Matrix is always the lookup source">Lookup: Matrix ✓</button>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                <label class="flex items-center cursor-pointer select-none justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <span class="text-sm">Deduplicate input (keep first row)</span>
+                  <div class="relative">
+                    <input id="optDedup" type="checkbox" class="sr-only" checked>
+                    <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                    <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+                  </div>
+                </label>
+
+                  <label class="flex items-center cursor-pointer select-none justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                    <span class="text-sm">Keep digits only</span>
+                    <div class="relative">
+                      <input id="optKeepDigits" type="checkbox" class="sr-only" checked>
+                      <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                      <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+                    </div>
+                  </label>
+
+                  <label class="flex items-center cursor-pointer select-none justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                    <span class="text-sm">Strip leading zeros</span>
+                    <div class="relative">
+                      <input id="optStripZeros" type="checkbox" class="sr-only">
+                      <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                      <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+                    </div>
+                  </label>
+
+                  <label class="flex items-center cursor-pointer select-none justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                    <span class="text-sm">Trim spaces</span>
+                    <div class="relative">
+                      <input id="optTrimSpaces" type="checkbox" class="sr-only" checked>
+                      <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                      <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+                    </div>
+                  </label>
+
+                <label class="flex items-center cursor-pointer select-none justify-between rounded-xl border border-slate-200 p-3 dark:border-slate-700 sm:col-span-2">
+                  <span class="text-sm">Append matrix-missed rows to matched results</span>
+                  <div class="relative">
+                    <input id="optAppendUploadMissed" type="checkbox" class="sr-only">
+                    <div class="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full transition-colors duration-200"></div>
+                    <div class="dot absolute left-1 top-1 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div>
+                  </div>
+                </label>
+
+              </div>
+              <div id="enrichInfo" class="text-sm text-slate-600 dark:text-slate-400"></div>
+
+            </div>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button id="runEnrichBtn" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition disabled:opacity-40 dark:bg-blue-700 dark:hover:bg-blue-600">Enrich</button>
+            <button id="downloadEnrichXlsxBtn" class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-40 dark:bg-emerald-700 dark:hover:bg-emerald-600" disabled>Download Enrich</button>
+          </div>
+        </div>
+
+        <div id="enrichPreviewCard" class="hidden rounded-2xl bg-white border border-slate-200 p-5 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-semibold">Enrich Preview</h2>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Results appear after you run enrich.</p>
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900">
+            <div id="resultTabs" class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button data-tab="matched" class="result-seg-btn px-3 py-1.5 text-xs font-medium text-center" aria-selected="true">Matched (<span id="countMatched">0</span>)</button>
+              <button data-tab="input-missed" class="result-seg-btn px-3 py-1.5 text-xs font-medium text-center" aria-selected="false">Input Not Matched (<span id="countInputMissed">0</span>)</button>
+              <button data-tab="matrix-missed" class="result-seg-btn px-3 py-1.5 text-xs font-medium text-center" aria-selected="false">Matrix Not Used (<span id="countMatrixMissed">0</span>)</button>
+            </div>
+          </div>
+
+          <div class="mt-3 max-h-[55vh] overflow-auto border border-slate-200 rounded-xl dark:border-slate-700">
+            <table id="resultTable" class="min-w-full text-xs">
+              <thead class="sticky top-0 bg-slate-100 dark:bg-slate-900"></thead>
+              <tbody>
+                <tr><td colspan="100" class="text-center p-8 text-slate-500 dark:text-slate-400">Run enrich to view results.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p id="globalStepTitle" class="text-sm font-semibold text-slate-900 dark:text-slate-100">Activity Log</p>
+            <p id="globalHint" class="text-xs text-slate-600 dark:text-slate-400 mt-1">Import shifts (and optional leave), process once, review the matrix, then continue.</p>
+          </div>
+          <button id="clearLog" class="text-xs px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 transition dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">Clear activity</button>
+        </div>
+        <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+          <pre id="log" class="text-[11px] font-mono whitespace-pre-wrap text-slate-700 dark:text-slate-300"></pre>
+        </div>
+      </div>
+
       <footer class="text-xs text-slate-500 dark:text-slate-500 pt-2 pb-8">
         <p class="mb-1">Disclaimer. Experimental. Data is processed locally. Validate before use.</p>
-        <p>Rota Matrix Generator v1.3 • © 2025 elroydr</p>
+        <p>Romagen v2.0 • © 2026</p>
       </footer>
+
     </section>
   </div>
 
@@ -224,34 +389,70 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <script>
-    // --- Dark Mode Logic (FIX 3: Refined Toggle) ---
+    // -----------------
+    // THEME
+    // -----------------
     const htmlEl = document.documentElement;
     const darkModeToggle = document.getElementById('darkModeToggle');
     const sunIcon = document.getElementById('sunIcon');
     const moonIcon = document.getElementById('moonIcon');
 
-    function setIcons() {
-      // The theme state is now fully determined by the 'dark' class on <html>
+    function setIcons(){
       const isDark = htmlEl.classList.contains('dark');
       sunIcon.classList.toggle('hidden', isDark);
       moonIcon.classList.toggle('hidden', !isDark);
     }
-
-    // Initialize icons based on the class set by the bootstrap script above
     setIcons();
-
-    // Add the toggle listener
     darkModeToggle.addEventListener('click', () => {
-      const currentlyDark = htmlEl.classList.contains('dark');
-      const newDark = !currentlyDark;
-      
+      const newDark = !htmlEl.classList.contains('dark');
       htmlEl.classList.toggle('dark', newDark);
       localStorage.setItem('theme', newDark ? 'dark' : 'light');
       setIcons();
     });
-    // --- End Dark Mode Logic ---
-    
-    // --- Application Logic (Unchanged core functionality) ---
+
+    // -----------------
+    // STEPPER
+    // -----------------
+    const segLoad = document.getElementById('segLoad');
+    const segEnrich = document.getElementById('segEnrich');
+
+    const stepLoad = document.getElementById('stepLoad');
+    const stepEnrich = document.getElementById('stepEnrich');
+
+    const globalStepTitle = document.getElementById('globalStepTitle');
+    const globalHint = document.getElementById('globalHint');
+
+    function updateStepGuidance(which){
+      if(!globalStepTitle || !globalHint) return;
+      if(which === 'load'){
+        globalStepTitle.textContent = 'Activity Log • Step 1: Process';
+        globalHint.textContent = 'Import shifts (and optional leave), process, review the matrix, then continue.';
+      } else {
+        globalStepTitle.textContent = 'Activity Log • Step 2: Enrich with FourthIDs';
+        globalHint.textContent = 'Paste input, optionally upload a matrix, run enrich, then review matched and unmatched results.';
+      }
+    }
+
+    function setStep(which){
+      const map = {
+        load: [segLoad, stepLoad],
+        enrich: [segEnrich, stepEnrich]
+      };
+      for (const k of Object.keys(map)) {
+        const [btn, panel] = map[k];
+        const on = (k === which);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        panel.classList.toggle('hidden', !on);
+      }
+      updateStepGuidance(which);
+    }
+
+    segLoad.addEventListener('click', () => setStep('load'));
+    segEnrich.addEventListener('click', () => setStep('enrich'));
+
+    // -----------------
+    // MATRIX STATE
+    // -----------------
     const fileInput = document.getElementById('fileInput');
     const drop = document.getElementById('drop');
     const leaveInput = document.getElementById('leaveInput');
@@ -266,110 +467,117 @@
     const clearLeaveBtn = document.getElementById('clearLeaveBtn');
 
     const processBtn = document.getElementById('processBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadMatrixBtn = document.getElementById('downloadMatrixBtn');
+    const toEnrichBtn = document.getElementById('toEnrichBtn');
+    const toLoadFromEnrichBtn = document.getElementById('toLoadFromEnrichBtn');
+
     const normalizeToggle = document.getElementById('normalizeToggle');
     const offToggle = document.getElementById('offToggle');
 
     const logEl = document.getElementById('log');
-    const previewWrap = document.getElementById('previewWrap');
+    const clearLog = document.getElementById('clearLog');
+    const weekBanner = document.getElementById('weekBanner');
+    const loadPreviewCard = document.getElementById('loadPreviewCard');
+    const enrichPreviewCard = document.getElementById('enrichPreviewCard');
+
     const prevThead = document.getElementById('prevThead');
     const prevTbody = document.getElementById('prevTbody');
     const previewCount = document.getElementById('previewCount');
-    const clearLog = document.getElementById('clearLog');
 
     let parsedRows = [];
     let leaveRows = [];
-    let outputRows = [];
+    let matrixRows = [];
+    let generatedMatrixRows = [];
+    let matrixSource = 'generated';
+
     let currentWeekStart = null;
     let currentWeekEnd = null;
-    let isProcessed = false; 
 
     const dayKeys = [
-      'Mon Start','Mon Finish','Tue Start','Tue Finish','Wed Start','Wed Finish','Thu Start','Thu Finish','Fri Start','Fri Finish','Sat Start','Sat Finish','Sun Start','Sun Finish'
+      'Mon Start','Mon Finish','Tue Start','Tue Finish','Wed Start','Wed Finish','Thu Start','Thu Finish',
+      'Fri Start','Fri Finish','Sat Start','Sat Finish','Sun Start','Sun Finish'
     ];
 
-    function log(msg){
-      logEl.textContent += `${msg}\n`;
+    function log(msg, level='info'){
+      if (!logEl) return;
+      const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+      const tag = (level || 'info').toUpperCase();
+      logEl.textContent += `[${ts}] [${tag}] ${msg}\n`;
       logEl.scrollTop = logEl.scrollHeight;
     }
 
-    clearLog.addEventListener('click', ()=>{ 
-        logEl.textContent = ''; 
-    });
+    clearLog?.addEventListener('click', () => { logEl.textContent = ''; });
 
-    // --- STATE MANAGEMENT ---
-    function updateProcessButton(processed) {
-        isProcessed = processed;
-        if (processed) {
-            processBtn.textContent = 'Reset';
-            processBtn.classList.remove('bg-blue-600', 'dark:bg-blue-700', 'dark:hover:bg-blue-600');
-            processBtn.classList.add('bg-slate-500', 'hover:bg-slate-600', 'dark:bg-slate-600', 'dark:hover:bg-slate-500');
-            fileInput.disabled = true;
-            leaveInput.disabled = true;
-            downloadBtn.disabled = false; 
-        } else {
-            processBtn.textContent = 'Process';
-            processBtn.classList.remove('bg-slate-500', 'hover:bg-slate-600', 'dark:bg-slate-600', 'dark:hover:bg-slate-500');
-            processBtn.classList.add('bg-blue-600', 'dark:bg-blue-700', 'dark:hover:bg-blue-600');
-            downloadBtn.disabled = true;
-            fileInput.disabled = false;
-            leaveInput.disabled = false;
-        }
-        
-        if (!processed && !parsedRows.length) {
-            processBtn.disabled = true;
-        } else {
-            processBtn.disabled = false;
-        }
+    function setButtons(){
+      const hasMain = parsedRows.length > 0;
+      const hasMatrix = matrixRows.length > 0;
+      processBtn.disabled = !hasMain;
+      downloadMatrixBtn.disabled = !hasMatrix;
+      if(toEnrichBtn) toEnrichBtn.disabled = !hasMatrix;
+      if(loadPreviewCard) loadPreviewCard.classList.toggle('hidden', !hasMatrix);
+      try{ if(typeof updateUseGeneratedMatrixAction === 'function') updateUseGeneratedMatrixAction(); }catch(e){}
     }
-    
-    // Set initial state
-    if (!parsedRows.length) {
-        processBtn.disabled = true;
-    }
-    
-    function handleToggleChange() {
-      if (isProcessed) {
-        log('Option changed. Please re-process data.');
-        isProcessed = false;
-        updateProcessButton(false);
-        previewWrap.classList.add('hidden');
+
+    setButtons();
+    updateStepGuidance('load');
+
+    function handleToggleChange(){
+      if (matrixRows.length && matrixSource === 'generated') {
+        matrixRows = [];
+        generatedMatrixRows = [];
+        weekBanner.textContent = '';
+        prevThead.innerHTML = '';
+        prevTbody.innerHTML = '';
+        previewCount.textContent = '';
+        setButtons();
+        log('Option changed. Generated matrix reset. Please re-process.', 'warn');
+        try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
       }
     }
-
     normalizeToggle.addEventListener('change', handleToggleChange);
     offToggle.addEventListener('change', handleToggleChange);
 
-    // --- FILE CLEAR FUNCTIONS ---
-    function clearMainFile() {
+    function clearMainFile(){
       parsedRows = [];
-      outputRows = [];
-      log(`Main shifts file cleared.`);
+      matrixRows = [];
+      generatedMatrixRows = [];
+      matrixSource = 'generated';
       mainFileStatus.textContent = '';
       mainFileStatusWrap.classList.add('hidden');
       drop.classList.remove('file-loaded');
       fileInput.value = '';
-      previewWrap.classList.add('hidden');
-      updateProcessButton(false);
+      weekBanner.textContent = '';
+      prevThead.innerHTML = '';
+      prevTbody.innerHTML = '';
+      previewCount.textContent = '';
+      if(typeof matrixUploadStatus !== 'undefined' && matrixUploadStatus) matrixUploadStatus.textContent = '';
+      if(typeof matrixUploadStatusWrap !== 'undefined' && matrixUploadStatusWrap) matrixUploadStatusWrap.classList.add('hidden');
+      if(typeof matrixDrop !== 'undefined' && matrixDrop) matrixDrop.classList.remove('file-loaded');
+      log('Main shifts file cleared.', 'info');
+      setButtons();
+      setStep('load');
+      try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
     }
 
-    function clearLeaveFile() {
+    function clearLeaveFile(){
       leaveRows = [];
-      log(`Leave file cleared.`);
       leaveFileStatus.textContent = '';
       leaveFileStatusWrap.classList.add('hidden');
       leaveDrop.classList.remove('file-loaded');
       leaveInput.value = '';
-      if (isProcessed) {
-          log('Leave data removed. Please re-process to update the matrix.');
-          updateProcessButton(false);
+      log('Leave file cleared.', 'info');
+      if (matrixRows.length && matrixSource === 'generated') {
+        matrixRows = [];
+        generatedMatrixRows = [];
+        log('Leave changed. Generated matrix reset. Please re-process.', 'warn');
+        setButtons();
       }
+      try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
     }
 
     clearMainBtn.addEventListener('click', clearMainFile);
     clearLeaveBtn.addEventListener('click', clearLeaveFile);
 
-    // --- DATE UTILITIES ---
     function parseDMY(s){
       const [d,m,y] = String(s||'').split('/').map(Number);
       if(!d||!m||!y) return null;
@@ -377,7 +585,7 @@
       dt.setHours(0,0,0,0);
       return Number.isNaN(dt.getTime()) ? null : dt;
     }
-    
+
     function startOfWeekMonday(dt){
       const t = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
       const day = t.getDay() || 7;
@@ -385,7 +593,7 @@
       t.setHours(0,0,0,0);
       return t;
     }
-    
+
     function endOfWeekSunday(dt){
       const s = startOfWeekMonday(dt);
       const e = new Date(s);
@@ -395,31 +603,24 @@
     }
 
     function getWeekNumber(d) {
-        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-        var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-        return Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+      d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
     }
-    
+
     function enumerateDatesInclusive(a,b){
-      const out = [];
+      const out=[];
       if(!a||!b) return out;
-      const start = a <= b ? new Date(a) : new Date(b);
-      const end   = a <= b ? new Date(b) : new Date(a);
-      
+      const start = a<=b ? new Date(a) : new Date(b);
+      const end = a<=b ? new Date(b) : new Date(a);
       start.setHours(0,0,0,0);
       end.setHours(0,0,0,0);
-
-      for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
-        out.push(new Date(d));
-      }
+      for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) out.push(new Date(d));
       return out;
     }
-    
-    function dayKeyFromDate(dt){
-      return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
-    }
-    // --- END DATE UTILITIES ---
+
+    function dayKeyFromDate(dt){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]; }
 
     function adjustTime(s){
       let t = String(s||'').trim();
@@ -437,182 +638,87 @@
     function headersOk(hdrs){
       const required = ['Employee ID','Employee','Group','Day','Date','Start Time','End Time','Minutes Break','Location','Role','Shift Rate','Hourly Rate','Hours','Cost','Notes'];
       const missing = required.filter(h => !hdrs.includes(h));
-      if(missing.length){ log(`Missing headers: ${missing.join(', ')}`); }
+      if(missing.length) log(`Missing required headers: ${missing.join(', ')}`, 'warn');
       return missing.length === 0;
     }
 
     function extractNumericCode(emp){
-      const m = String(emp||'').match(/(\d{3,})$/); 
+      const m = String(emp||'').match(/(\d{3,})$/);
       return m ? m[1] : '';
     }
 
     function normaliseDay(d){
-      const v = String(d || '').trim().slice(0,3);
+      const v = String(d||'').trim().slice(0,3);
       const map = { Mon:'Mon', Tue:'Tue', Wed:'Wed', Thu:'Thu', Fri:'Fri', Sat:'Sat', Sun:'Sun' };
       return map[v] || null;
     }
-    
+
     function coalesceID(row){
-      return String(
-        row['Employee ID'] ?? row['EmployeeID'] ?? row['RotaCloud ID'] ?? row['ID'] ?? ''
-      ).trim();
+      return String(row['Employee ID'] ?? row['EmployeeID'] ?? row['RotaCloud ID'] ?? row['ID'] ?? '').trim();
     }
-    
-    function normName(s){
-      return String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
-    }
-    
+
+    function normName(s){ return String(s||'').trim().replace(/\s+/g,' ').toLowerCase(); }
+
     function buildWeekWindowFromShifts(shiftRows){
-      const firstShiftWithDate = shiftRows.find(r => r['Date']);
-      const dt = parseDMY(firstShiftWithDate?.['Date']);
-      
+      const first = shiftRows.find(r => r['Date']);
+      const dt = parseDMY(first?.['Date']);
       const ws = dt ? startOfWeekMonday(dt) : null;
-      const we = dt ? endOfWeekSunday(dt) : null; 
-      
-      return {weekStart: ws, weekEnd: we};
+      const we = dt ? endOfWeekSunday(dt) : null;
+      return { weekStart: ws, weekEnd: we };
     }
 
     function buildLeaveMap(leaveRows, weekStart, weekEnd){
-      const map = new Map(); 
+      const map = new Map();
       for(const r of leaveRows){
         const id = coalesceID(r);
         const rawName = String(r['Employee'] || r['Name'] || '').trim();
         const nameKey = normName(rawName);
         if(!id && !nameKey) continue;
-
         const sd = parseDMY(r['Start Date']);
         const ed = parseDMY(r['End Date']);
-        
         if(!sd || !ed) continue;
-
-        const dates = enumerateDatesInclusive(sd, ed).filter(d => {
-          if(!weekStart || !weekEnd) return true;
-          return d >= weekStart && d <= weekEnd;
-        });
-
-        if(dates.length === 0) continue;
-
+        const dates = enumerateDatesInclusive(sd, ed).filter(d => !weekStart || !weekEnd ? true : (d >= weekStart && d <= weekEnd));
+        if(!dates.length) continue;
         const label = String(r['Type'] || 'Holiday').trim() || 'Holiday';
         let entry = (id && map.get(id)) || (nameKey && map.get(nameKey));
-        if(!entry){
-          entry = { id: id, name: rawName, byDay: new Set(), label };
-        } 
-        
+        if(!entry) entry = { id, name: rawName, byDay: new Set(), label };
         if(id && !map.has(id)) map.set(id, entry);
         if(nameKey && !map.has(nameKey)) map.set(nameKey, entry);
-
-        for(const d of dates){
-          entry.byDay.add(dayKeyFromDate(d));
-        }
+        for(const d of dates) entry.byDay.add(dayKeyFromDate(d));
       }
       return map;
     }
-    
-    // --- FILE HANDLING ---
-    function handleFile(file){
-      if(!file) return;
-      const fileName = file.name;
-      Papa.parse(file,{
-        header:true,
-        skipEmptyLines:true,
-        complete: res => {
-          parsedRows = res.data;
-          if(!parsedRows.length){ 
-            log(`No rows found in main shifts: ${fileName}.`); 
-            drop.classList.remove('file-loaded');
-            updateProcessButton(false);
-            return; 
-          }
-          const hdrs = Object.keys(parsedRows[0]);
-          if(!headersOk(hdrs)){
-            log('Fix headers in your export and try again.');
-            drop.classList.remove('file-loaded');
-            updateProcessButton(false);
-            return;
-          }
-          log(`${parsedRows.length} rows parsed from main shifts: ${fileName}`);
-          mainFileStatus.textContent = fileName;
-          mainFileStatusWrap.classList.remove('hidden');
-          drop.classList.add('file-loaded');
-          updateProcessButton(false);
-          fileInput.value = '';
-        },
-        error: err => {
-          log(`Parse error (main): ${err?.message || err}`);
-          mainFileStatus.textContent = `Error: ${err?.message || 'Parse Failed'}`;
-          drop.classList.remove('file-loaded');
-          updateProcessButton(false);
-        }
-      });
-    }
 
-    function handleLeave(file){
-      if(!file) return;
-      const fileName = file.name;
-      Papa.parse(file,{
-        header:true,
-        skipEmptyLines:true,
-        complete: res => {
-          leaveRows = res.data;
-          log(`${leaveRows.length} leave rows parsed from: ${fileName}`);
-          leaveFileStatus.textContent = fileName;
-          leaveFileStatusWrap.classList.remove('hidden');
-          leaveDrop.classList.add('file-loaded');
-          leaveInput.value = '';
-          if (isProcessed) {
-              log('Leave file updated. Please re-process to include new leave data.');
-              updateProcessButton(false);
-          }
-        },
-        error: err => {
-          log(`Parse error (leave): ${err?.message || err}`);
-          leaveFileStatus.textContent = `Error: ${err?.message || 'Parse Failed'}`;
-          leaveDrop.classList.remove('file-loaded');
-        }
-      });
-    }
-
-    fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
-    leaveInput.addEventListener('change', e => handleLeave(e.target.files[0]));
-
-    ;['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); drop.classList.add('dragover'); }));
-    ;['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); drop.classList.remove('dragover'); }));
-    drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
-
-    ;['dragenter','dragover'].forEach(evt => leaveDrop.addEventListener(evt, e=>{ e.preventDefault(); leaveDrop.classList.add('dragover'); }));
-    ;['dragleave','drop'].forEach(evt => leaveDrop.addEventListener(evt, e=>{ e.preventDefault(); leaveDrop.classList.remove('dragover'); }));
-    leaveDrop.addEventListener('drop', e => handleLeave(e.dataTransfer.files[0]));
-    
-    // --- MATRIX BUILD LOGIC (Unchanged core functionality) ---
     function buildMatrix(shiftRows, leaveRows){
-      if (!shiftRows.length) return [];
-      
+      if(!shiftRows.length) return [];
+
       const {weekStart, weekEnd} = buildWeekWindowFromShifts(shiftRows);
       currentWeekStart = weekStart;
       currentWeekEnd = weekEnd;
 
-      const fillEmptyCellsWithOff = offToggle.checked;
-      const defaultCell = fillEmptyCellsWithOff ? 'Off' : '';
-      
-      if (!weekStart) {
-         log("Warning: Could not determine week window from shift CSV dates. Leave date filtering will be skipped.");
+      const fillEmpty = offToggle.checked;
+      const defaultCell = fillEmpty ? 'Off' : '';
+
+      if(weekStart){
+        const wn = getWeekNumber(weekStart);
+        const wsStr = weekStart.toLocaleDateString('en-GB');
+        const weStr = weekEnd.toLocaleDateString('en-GB');
+        weekBanner.textContent = `Detected Week ${wn}: ${wsStr} – ${weStr}`;
+        log(`Week detected: ${wn} (${wsStr} - ${weStr}).`, 'info');
       } else {
-         const weekNumber = getWeekNumber(weekStart);
-         const wsStr = weekStart.toLocaleDateString('en-GB');
-         const weStr = weekEnd.toLocaleDateString('en-GB');
-         log(`Detected Week ${weekNumber}: ${wsStr} - ${weStr}`);
+        weekBanner.textContent = 'Week range could not be detected from dates.';
+        log('Week range could not be detected from shift dates.', 'warn');
       }
-      
+
       const leaveMap = buildLeaveMap(leaveRows, weekStart, weekEnd);
       const byKey = new Map();
       const processedLeaveEntries = new Set();
-      const dayKeysShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dayKeysShort = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
-      // 1. Process shifts and initialize records with leave overrides
       for(const r of shiftRows){
         const id = coalesceID(r);
         const emp = String(r['Employee'] || '').trim();
-        const key = id || normName(emp); 
+        const key = id || normName(emp);
         if(!key) continue;
 
         if(!byKey.has(key)){
@@ -622,168 +728,885 @@
             FourthID: extractNumericCode(emp),
             Employee: emp,
             Group: String(r['Group'] || 'Shift').trim(),
-            Location: String(r['Location']||'').trim(),
+            Location: String(r['Location'] || '').trim(),
+            Notes: String(r['Notes'] || '').trim(),
             Hours: 0,
-            'Mon Start': defaultCell, 'Mon Finish': defaultCell, 'Tue Start': defaultCell, 'Tue Finish': defaultCell, 
-            'Wed Start': defaultCell, 'Wed Finish': defaultCell, 'Thu Start': defaultCell, 'Thu Finish': defaultCell, 
-            'Fri Start': defaultCell, 'Fri Finish': defaultCell, 'Sat Start': defaultCell, 'Sat Finish': defaultCell, 
-            'Sun Start': defaultCell, 'Sun Finish': defaultCell
+            'Mon Start': defaultCell,'Mon Finish': defaultCell,'Tue Start': defaultCell,'Tue Finish': defaultCell,
+            'Wed Start': defaultCell,'Wed Finish': defaultCell,'Thu Start': defaultCell,'Thu Finish': defaultCell,
+            'Fri Start': defaultCell,'Fri Finish': defaultCell,'Sat Start': defaultCell,'Sat Finish': defaultCell,
+            'Sun Start': defaultCell,'Sun Finish': defaultCell,
           });
         }
-        
-        const day = normaliseDay(r['Day']); 
+
+        const day = normaliseDay(r['Day']);
         if(!day) continue;
 
         const rec = byKey.get(key);
-        let leaveEntry = leaveMap.get(id) || leaveMap.get(normName(emp));
-        
-        // --- Proactive Holiday Injection ---
-        if (leaveEntry) {
-            processedLeaveEntries.add(leaveEntry);
-            const leaveLabel = leaveEntry.label || 'Holiday';
-            
-            for (const leaveDay of dayKeysShort) {
-                if (leaveEntry.byDay.has(leaveDay)) {
-                    if (rec[`${leaveDay} Start`] === defaultCell || rec[`${leaveDay} Start`] === '') {
-                        rec[`${leaveDay} Start`] = leaveLabel;
-                        rec[`${leaveDay} Finish`] = leaveLabel;
-                    }
-                }
-            }
-            
-            const currentRecGroup = rec.Group;
-            const currentShiftGroup = String(r['Group']||'').trim();
+        const leaveEntry = leaveMap.get(id) || leaveMap.get(normName(emp));
 
-            if (currentShiftGroup && currentShiftGroup !== 'Shift') {
-               rec.Group = currentShiftGroup;
-            } else if (currentRecGroup === 'Shift' || currentRecGroup === '') {
-                rec.Group = leaveLabel;
+        if(leaveEntry){
+          processedLeaveEntries.add(leaveEntry);
+          const leaveLabel = leaveEntry.label || 'Holiday';
+          for(const ld of dayKeysShort){
+            if(leaveEntry.byDay.has(ld)){
+              if(rec[`${ld} Start`] === defaultCell || rec[`${ld} Start`] === ''){
+                rec[`${ld} Start`] = leaveLabel;
+                rec[`${ld} Finish`] = leaveLabel;
+              }
             }
+          }
+          const currentShiftGroup = String(r['Group']||'').trim();
+          if(currentShiftGroup && currentShiftGroup !== 'Shift') rec.Group = currentShiftGroup;
+          else if(rec.Group === 'Shift' || rec.Group === '') rec.Group = leaveLabel;
         }
-        // --- End Holiday Injection ---
 
-        const st = adjustTime(r['Start Time']);
-        const et = adjustTime(r['End Time']);
-        rec[`${day} Start`] = st;
-        rec[`${day} Finish`] = et;
+        rec[`${day} Start`] = adjustTime(r['Start Time']);
+        rec[`${day} Finish`] = adjustTime(r['End Time']);
 
         const shiftGroup = String(r['Group']||'').trim();
-        if (shiftGroup && shiftGroup !== 'Shift') {
-           rec.Group = shiftGroup;
-        }
+        if(shiftGroup && shiftGroup !== 'Shift') rec.Group = shiftGroup;
 
         const h = parseNumber(r['Hours']);
         rec.Hours += Number.isFinite(h) ? h : 0;
+
+        const notes = String(r['Notes'] || '').trim();
+        if(notes && !rec.Notes) rec.Notes = notes;
       }
 
-      // 2. Inject people who only exist in leave file (Leave-only individuals)
+      // Leave-only people
       for(const [k, entry] of leaveMap.entries()){
-          if (processedLeaveEntries.has(entry) || byKey.has(k)) continue; 
-
-          const name = entry.name || '';
-          const id = entry.id || '';
-          const leaveLabel = entry.label || 'Holiday';
-          
-          const rec = {
-            _id: id,
-            RotaCloudID: id,
-            FourthID: extractNumericCode(name), 
-            Employee: name,
-            Group: leaveLabel, 
-            Location: '',
-            Hours: 0, 
-            'Mon Start': defaultCell, 'Mon Finish': defaultCell, 'Tue Start': defaultCell, 'Tue Finish': defaultCell, 
-            'Wed Start': defaultCell, 'Wed Finish': defaultCell, 'Thu Start': defaultCell, 'Thu Finish': defaultCell, 
-            'Fri Start': defaultCell, 'Fri Finish': defaultCell, 'Sat Start': defaultCell, 'Sat Finish': defaultCell, 
-            'Sun Start': defaultCell, 'Sun Finish': defaultCell
-          };
-          
-          const dayKeysShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-          for(const d of dayKeysShort){
-            if(entry.byDay.has(d)){
-                rec[`${d} Start`] = leaveLabel;
-                rec[`${d} Finish`] = leaveLabel;
-            }
+        if(processedLeaveEntries.has(entry) || byKey.has(k)) continue;
+        const name = entry.name || '';
+        const id = entry.id || '';
+        const leaveLabel = entry.label || 'Holiday';
+        const rec = {
+          _id: id,
+          RotaCloudID: id,
+          FourthID: extractNumericCode(name),
+          Employee: name,
+          Group: leaveLabel,
+          Location: '',
+          Notes: '',
+          Hours: 0,
+          'Mon Start': defaultCell,'Mon Finish': defaultCell,'Tue Start': defaultCell,'Tue Finish': defaultCell,
+          'Wed Start': defaultCell,'Wed Finish': defaultCell,'Thu Start': defaultCell,'Thu Finish': defaultCell,
+          'Fri Start': defaultCell,'Fri Finish': defaultCell,'Sat Start': defaultCell,'Sat Finish': defaultCell,
+          'Sun Start': defaultCell,'Sun Finish': defaultCell,
+        };
+        for(const d of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']){
+          if(entry.byDay.has(d)){
+            rec[`${d} Start`] = leaveLabel;
+            rec[`${d} Finish`] = leaveLabel;
           }
-          byKey.set(k, rec); 
-          processedLeaveEntries.add(entry);
+        }
+        byKey.set(k, rec);
+        processedLeaveEntries.add(entry);
       }
 
-      let out = Array.from(byKey.values()).map(({_id, ...rest}) => ({...rest, Hours: Math.round(rest.Hours)}));
-      out.sort((a,b)=>{
-        const an = (a.Employee || '').toLowerCase();
-        const bn = (b.Employee || '').toLowerCase();
-        const nameComparison = an.localeCompare(bn);
-        if (nameComparison !== 0) return nameComparison;
-        return String(a.RotaCloudID || '').localeCompare(String(b.RotaCloudID || ''));
-      });
-
+      const out = Array.from(byKey.values()).map(({_id, ...rest}) => ({...rest, Hours: Math.round(rest.Hours)}));
+      out.sort((a,b)=> (a.Employee||'').toLowerCase().localeCompare((b.Employee||'').toLowerCase()));
       return out;
     }
 
-    function renderPreview(rows){
-      previewWrap.classList.remove('hidden');
+    function renderMatrixPreview(rows){
       prevThead.innerHTML = '';
       prevTbody.innerHTML = '';
+      previewCount.textContent = '';
       if(!rows.length) return;
-      
-      const cols = ['RotaCloudID','FourthID','Employee','Group','Location','Hours',...dayKeys];
+      const cols = ['RotaCloudID','FourthID','Employee','Group','Location','Hours','Notes',...dayKeys];
       const tr = document.createElement('tr');
-      for(const c of cols){ 
-        const th = document.createElement('th'); 
-        th.className = 'px-2 py-2 font-medium border-b border-slate-200 dark:border-slate-600'; 
-        th.textContent = c; 
-        tr.appendChild(th); 
+      for(const c of cols){
+        const th = document.createElement('th');
+        th.className = 'text-left p-3 border-b border-slate-200 dark:border-slate-700 font-semibold';
+        th.textContent = c;
+        tr.appendChild(th);
       }
       prevThead.appendChild(tr);
 
-      const maxRows = Math.min(5, rows.length);
-      for(let i=0;i<maxRows;i++){
+      for(let i=0;i<rows.length;i++){
         const r = rows[i];
         const trb = document.createElement('tr');
-        for(const c of cols){ 
-          const td = document.createElement('td'); 
-          td.className = 'px-2 py-2'; 
-          td.textContent = r[c] ?? ''; 
-          trb.appendChild(td); 
+        for(const c of cols){
+          const td = document.createElement('td');
+          td.className = 'p-3 border-b border-slate-100 dark:border-slate-700';
+          td.textContent = r[c] ?? '';
+          trb.appendChild(td);
         }
-        prevTbody.appendChild(trb); 
+        prevTbody.appendChild(trb);
       }
-      previewCount.textContent = `${Math.min(5, rows.length)} of ${rows.length} shown`;
+      previewCount.textContent = `${rows.length} rows`;
     }
 
-    document.getElementById('processBtn').addEventListener('click', () => {
-      if (isProcessed) {
-        // RESET functionality
-        clearMainFile();
-        clearLeaveFile();
-        logEl.textContent = '';
-        log('System reset. Please load files to begin processing.');
-        return;
-      }
-
-      if(!parsedRows.length){ log('Load the main shifts CSV first.'); return; }
-      log('Processing...');
-      try{
-        outputRows = buildMatrix(parsedRows, leaveRows);
-        log(`Done. ${outputRows.length} employees processed.`);
-        renderPreview(outputRows);
-        updateProcessButton(true);
-      } catch(err){ log(`Process error: ${err?.message || err}`); console.error(err); }
-    });
-
-    document.getElementById('downloadBtn').addEventListener('click', () => {
-      if(!outputRows.length){ log('Nothing to download.'); return; }
-      const cols = ['RotaCloudID','FourthID','Employee','Group','Location','Hours',...dayKeys];
-      const data = [cols, ...outputRows.map(r => cols.map(c => r[c] ?? ''))];
+    function writeMatrixXlsx(){
+      if(!matrixRows.length){ log('No matrix data to download.', 'warn'); return; }
+      const cols = ['RotaCloudID','FourthID','Employee','Group','Location','Hours','Notes',...dayKeys];
+      const data = [cols, ...matrixRows.map(r => cols.map(c => r[c] ?? ''))];
       const ws = XLSX.utils.aoa_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Weekly Matrix');
       const wsDate = currentWeekStart ? currentWeekStart.toLocaleDateString('en-GB').replace(/\//g, '-') : new Date().toISOString().slice(0,10);
       const fname = `shift_matrix_week${currentWeekStart ? getWeekNumber(currentWeekStart) : ''}_${wsDate}.xlsx`;
       XLSX.writeFile(wb, fname);
-      log(`Saved ${fname}`);
+      log(`Matrix downloaded: ${fname}`, 'info');
+    }
+
+    downloadMatrixBtn.addEventListener('click', writeMatrixXlsx);
+
+    function handleMainFile(file){
+      if(!file) return;
+      const fileName = file.name;
+      Papa.parse(file,{
+        header:true,
+        skipEmptyLines:true,
+        complete: res => {
+          parsedRows = res.data;
+          if(!parsedRows.length){
+            log(`No rows found in main shifts file: ${fileName}.`, 'warn');
+            drop.classList.remove('file-loaded');
+            setButtons();
+            return;
+          }
+          const hdrs = Object.keys(parsedRows[0]||{});
+          if(!headersOk(hdrs)){
+            log('Please fix your export headers and try again.', 'warn');
+            drop.classList.remove('file-loaded');
+            setButtons();
+            return;
+          }
+          log(`Main shifts loaded: ${parsedRows.length} rows from ${fileName}.`, 'info');
+          mainFileStatus.textContent = fileName;
+          mainFileStatusWrap.classList.remove('hidden');
+          drop.classList.add('file-loaded');
+          matrixRows = [];
+          setButtons();
+          fileInput.value = '';
+          try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
+        },
+        error: err => {
+          log(`Main shifts parse error: ${err?.message || err}`, 'error');
+          mainFileStatus.textContent = `Error: ${err?.message || 'Parse Failed'}`;
+          drop.classList.remove('file-loaded');
+          setButtons();
+          try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
+        }
+      });
+    }
+
+    function handleLeaveFile(file){
+      if(!file) return;
+      const fileName = file.name;
+      Papa.parse(file,{
+        header:true,
+        skipEmptyLines:true,
+        complete: res => {
+          leaveRows = res.data;
+          log(`Leave file loaded: ${leaveRows.length} rows from ${fileName}.`, 'info');
+          leaveFileStatus.textContent = fileName;
+          leaveFileStatusWrap.classList.remove('hidden');
+          leaveDrop.classList.add('file-loaded');
+          leaveInput.value = '';
+          if(matrixRows.length && matrixSource === 'generated'){
+            matrixRows = [];
+            generatedMatrixRows = [];
+            weekBanner.textContent = '';
+            prevThead.innerHTML = '';
+            prevTbody.innerHTML = '';
+            previewCount.textContent = '';
+            log('Leave updated. Generated matrix reset. Please re-process.', 'warn');
+            setButtons();
+          }
+          try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
+        },
+        error: err => {
+          log(`Leave file parse error: ${err?.message || err}`, 'error');
+          leaveFileStatus.textContent = `Error: ${err?.message || 'Parse Failed'}`;
+          leaveDrop.classList.remove('file-loaded');
+          try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
+        }
+      });
+    }
+
+    fileInput.addEventListener('change', e => handleMainFile(e.target.files[0]));
+    leaveInput.addEventListener('change', e => handleLeaveFile(e.target.files[0]));
+
+    ['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); drop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); drop.classList.remove('dragover'); }));
+    drop.addEventListener('drop', e => handleMainFile(e.dataTransfer.files[0]));
+
+    ['dragenter','dragover'].forEach(evt => leaveDrop.addEventListener(evt, e=>{ e.preventDefault(); leaveDrop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(evt => leaveDrop.addEventListener(evt, e=>{ e.preventDefault(); leaveDrop.classList.remove('dragover'); }));
+    leaveDrop.addEventListener('drop', e => handleLeaveFile(e.dataTransfer.files[0]));
+
+    processBtn.addEventListener('click', () => {
+      if(!parsedRows.length){ log('Load a main shifts CSV first.', 'warn'); return; }
+      log('Processing matrix...', 'info');
+      try {
+        matrixRows = buildMatrix(parsedRows, leaveRows);
+        generatedMatrixRows = matrixRows.map(r => ({ ...r }));
+        matrixSource = 'generated';
+        log(`Matrix ready. ${matrixRows.length} employees processed.`, 'info');
+        renderMatrixPreview(matrixRows);
+        setButtons();
+        // update Enrich run availability (if input already parsed)
+        try{ if(typeof updateEnrichButtons === 'function') updateEnrichButtons(); }catch(e){}
+        setStep('load');
+      } catch(err){
+        log(`Matrix process error: ${err?.message || err}`, 'error');
+        console.error(err);
+      }
     });
+
+    toEnrichBtn?.addEventListener('click', () => {
+      if(!matrixRows.length){
+        log('Process the matrix first before continuing.', 'warn');
+        setStep('load');
+        return;
+      }
+      setStep('enrich');
+    });
+
+    toLoadFromEnrichBtn?.addEventListener('click', () => setStep('load'));
+
+    // -----------------
+    // ENRICH (FOMA MERGED)
+    // -----------------
+    let inputRows = [];
+    let inputColumns = [];
+    let inputFourthKey = 'FourthID';
+
+    let enrichMatched = [];
+    let enrichInputMissed = [];
+    let enrichMatrixMissed = [];
+
+    function updateEnrichPreviewVisibility(){
+      const hasEnrichRows = (enrichMatched.length + enrichInputMissed.length + enrichMatrixMissed.length) > 0;
+      if(enrichPreviewCard) enrichPreviewCard.classList.toggle('hidden', !hasEnrichRows);
+    }
+
+    const byId = (id) => document.getElementById(id);
+
+    const matrixUploadInput = byId('matrixUploadInput');
+    const matrixDrop = byId('matrixDrop');
+    const matrixUploadStatus = byId('matrixUploadStatus');
+    const matrixUploadStatusWrap = byId('matrixUploadStatusWrap');
+    const clearMatrixUploadBtn = byId('clearMatrixUploadBtn');
+    const useGeneratedMatrixBtn = byId('useGeneratedMatrixBtn');
+    const enrichActionHint = byId('enrichActionHint');
+
+    function updateUseGeneratedMatrixAction(){
+      if(!useGeneratedMatrixBtn) return;
+      const hasGenerated = Array.isArray(generatedMatrixRows) && generatedMatrixRows.length > 0;
+      useGeneratedMatrixBtn.classList.toggle('hidden', !hasGenerated);
+      useGeneratedMatrixBtn.disabled = !hasGenerated;
+    }
+
+    function updateEnrichReadiness(){
+      updateUseGeneratedMatrixAction();
+      const matrixReady = matrixRows.length > 0;
+      const inputParsed = inputRows.length > 0;
+
+      if(matrixReady){
+        if(matrixSource === 'uploaded'){
+          if(matrixUploadStatusWrap) matrixUploadStatusWrap.classList.remove('hidden');
+          if(clearMatrixUploadBtn) clearMatrixUploadBtn.classList.remove('hidden');
+          if(!matrixUploadStatus?.textContent?.trim()){
+            matrixUploadStatus.textContent = `Uploaded matrix selected (${matrixRows.length} rows)`;
+          }
+        } else {
+          if(matrixUploadStatusWrap) matrixUploadStatusWrap.classList.remove('hidden');
+          if(matrixUploadStatus) matrixUploadStatus.textContent = `Processed matrix selected (${matrixRows.length} rows)`;
+          if(clearMatrixUploadBtn) clearMatrixUploadBtn.classList.remove('hidden');
+        }
+      } else {
+        if(matrixUploadStatusWrap) matrixUploadStatusWrap.classList.add('hidden');
+        if(matrixUploadStatus) matrixUploadStatus.textContent = '';
+        if(clearMatrixUploadBtn) clearMatrixUploadBtn.classList.add('hidden');
+      }
+
+      if(enrichActionHint){
+        if(!matrixReady) enrichActionHint.textContent = 'Select a matrix source, parse input, then run enrich.';
+        else if(!inputParsed) enrichActionHint.textContent = 'Matrix selected. Parse your input to continue.';
+        else enrichActionHint.textContent = 'Ready to run enrich.';
+      }
+    }
+
+    function normaliseHeaderKey(s){
+      return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function pickMatrixValue(indexed, aliases){
+      for(const alias of aliases){
+        if(Object.prototype.hasOwnProperty.call(indexed, alias)){
+          const v = indexed[alias];
+          if(v != null && String(v).trim() !== '') return v;
+        }
+      }
+      return '';
+    }
+
+    function normaliseMatrixRow(raw){
+      const indexed = {};
+      for(const k of Object.keys(raw || {})) indexed[normaliseHeaderKey(k)] = raw[k];
+
+      const out = {
+        RotaCloudID: pickMatrixValue(indexed, ['rotacloudid', 'employeeid', 'id', 'rotacloud']),
+        FourthID: pickMatrixValue(indexed, ['fourthid', 'fourthidoutput', 'fourthidinput']),
+        Employee: pickMatrixValue(indexed, ['employee', 'name']),
+        Group: pickMatrixValue(indexed, ['group']),
+        Location: pickMatrixValue(indexed, ['location']),
+        Hours: pickMatrixValue(indexed, ['hours']),
+        Notes: pickMatrixValue(indexed, ['notes'])
+      };
+
+      for(const k of dayKeys) out[k] = pickMatrixValue(indexed, [normaliseHeaderKey(k)]);
+
+      const hasData = [out.RotaCloudID, out.FourthID, out.Employee, ...dayKeys.map(k => out[k])]
+        .some(v => String(v ?? '').trim() !== '');
+      return hasData ? out : null;
+    }
+
+    function parseUploadedMatrixRows(rows){
+      const normalised = (rows || []).map(normaliseMatrixRow).filter(Boolean);
+      return normalised;
+    }
+
+    function getGeneratedWeekBanner(){
+      return currentWeekStart
+        ? `Detected Week ${getWeekNumber(currentWeekStart)}: ${currentWeekStart.toLocaleDateString('en-GB')} – ${currentWeekEnd.toLocaleDateString('en-GB')}`
+        : '';
+    }
+
+    function useGeneratedMatrix(logMessage = true){
+      if(!generatedMatrixRows.length){
+        if(logMessage) log('No processed matrix is available yet. Process shifts first or upload a matrix file.', 'warn');
+        return;
+      }
+      matrixRows = generatedMatrixRows.map(r => ({ ...r }));
+      matrixSource = 'generated';
+      renderMatrixPreview(matrixRows);
+      weekBanner.textContent = getGeneratedWeekBanner();
+      if(matrixDrop) matrixDrop.classList.remove('file-loaded');
+      if(matrixUploadStatusWrap) matrixUploadStatusWrap.classList.remove('hidden');
+      if(matrixUploadStatus) matrixUploadStatus.textContent = `Processed matrix selected (${matrixRows.length} rows)`;
+      setButtons();
+      try{ updateEnrichButtons(); }catch(e){}
+      if(logMessage) log(`Processed matrix selected (${matrixRows.length} rows).`, 'info');
+    }
+
+    function applyUploadedMatrix(fileName, rows){
+      if(!rows.length){
+        log(`Uploaded matrix has no usable rows: ${fileName}.`, 'warn');
+        return;
+      }
+      matrixRows = rows;
+      matrixSource = 'uploaded';
+      renderMatrixPreview(matrixRows);
+      weekBanner.textContent = 'Manual matrix uploaded from Enrich tab.';
+      matrixUploadStatus.textContent = `${fileName} (${rows.length} rows)`;
+      matrixUploadStatusWrap.classList.remove('hidden');
+      if(matrixDrop) matrixDrop.classList.add('file-loaded');
+      setButtons();
+      try{ updateEnrichButtons(); }catch(e){}
+      log(`Manual matrix loaded: ${rows.length} rows from ${fileName}.`, 'info');
+    }
+
+    function handleMatrixUpload(file){
+      if(!file) return;
+      const fileName = file.name;
+      const lower = fileName.toLowerCase();
+
+      if(lower.endsWith('.csv')){
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (res) => {
+            const rows = parseUploadedMatrixRows(res.data || []);
+            applyUploadedMatrix(fileName, rows);
+            matrixUploadInput.value = '';
+          },
+          error: (err) => {
+            log(`Matrix upload parse error (CSV): ${err?.message || err}`, 'error');
+          }
+        });
+        return;
+      }
+
+      if(lower.endsWith('.xlsx') || lower.endsWith('.xls')){
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try{
+            const wb = XLSX.read(e.target.result, { type: 'array' });
+            const firstSheet = wb.SheetNames[0];
+            if(!firstSheet){
+              log(`Matrix upload failed: no sheet found in ${fileName}.`, 'error');
+              return;
+            }
+            const ws = wb.Sheets[firstSheet];
+            const rawRows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            const rows = parseUploadedMatrixRows(rawRows);
+            applyUploadedMatrix(fileName, rows);
+            matrixUploadInput.value = '';
+          }catch(err){
+            log(`Matrix upload parse error (XLSX): ${err?.message || err}`, 'error');
+          }
+        };
+        reader.onerror = () => log(`Matrix upload failed while reading ${fileName}.`, 'error');
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+
+      log('Unsupported matrix file type. Use CSV or XLSX.', 'warn');
+    }
+
+    function clearUploadedMatrix(){
+      matrixUploadInput.value = '';
+      matrixUploadStatus.textContent = '';
+      matrixUploadStatusWrap.classList.add('hidden');
+
+      matrixRows = [];
+      matrixSource = 'generated';
+      weekBanner.textContent = '';
+      prevThead.innerHTML = '';
+      prevTbody.innerHTML = '';
+      previewCount.textContent = '';
+      if(matrixDrop) matrixDrop.classList.remove('file-loaded');
+      log('Matrix source cleared. Select a matrix file or use the processed matrix.', 'info');
+
+      setButtons();
+      try{ updateEnrichButtons(); }catch(e){}
+    }
+
+    matrixUploadInput?.addEventListener('change', e => handleMatrixUpload(e.target.files[0]));
+    ['dragenter','dragover'].forEach(evt => matrixDrop?.addEventListener(evt, e=>{ e.preventDefault(); matrixDrop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(evt => matrixDrop?.addEventListener(evt, e=>{ e.preventDefault(); matrixDrop.classList.remove('dragover'); }));
+    matrixDrop?.addEventListener('drop', e => handleMatrixUpload(e.dataTransfer.files[0]));
+    clearMatrixUploadBtn?.addEventListener('click', clearUploadedMatrix);
+    useGeneratedMatrixBtn?.addEventListener('click', () => useGeneratedMatrix(true));
+
+    function updateEnrichButtons(){
+      const runBtn = byId('runEnrichBtn');
+      const downloadXlsx = byId('downloadEnrichXlsxBtn');
+      const hasMatrix = Array.isArray(matrixRows) && matrixRows.length > 0;
+      const hasInput = Array.isArray(inputRows) && inputRows.length > 0;
+      if(runBtn) runBtn.disabled = !(hasMatrix && hasInput);
+      if(downloadXlsx) downloadXlsx.disabled = !(enrichMatched.length || enrichInputMissed.length || enrichMatrixMissed.length);
+      updateEnrichReadiness();
+    }
+
+    function looksLikeHeaderRow(row){
+      if(!Array.isArray(row) || !row.length) return false;
+      const headerLike = /fourth|employee|name|group|location|note|hour|date|start|end|id|code|number|staff|rota/i;
+      const cells = row.map(v => String(v || '').trim());
+      const nonEmpty = cells.filter(Boolean);
+      if(!nonEmpty.length) return false;
+      const headerHits = nonEmpty.filter(v => headerLike.test(v)).length;
+      const numericOnly = nonEmpty.filter(v => /^\d+$/.test(v)).length;
+      return headerHits >= Math.max(1, Math.ceil(nonEmpty.length * 0.4)) && numericOnly < nonEmpty.length;
+    }
+
+    function matrixKeySet(){
+      const keys = new Set();
+      for(const r of matrixRows){
+        const k1 = normaliseId(r?.FourthID ?? '');
+        const k2 = normaliseId(r?.RotaCloudID ?? '');
+        if(k1) keys.add(k1);
+        if(k2) keys.add(k2);
+      }
+      return keys;
+    }
+
+    function guessFourthColumn(columns, objects){
+      if(!columns.length) return 'FourthID';
+      const exact = columns.find(c => /^fourth\s*id$/i.test(c));
+      if(exact) return exact;
+
+      const keys = matrixKeySet();
+      let bestCol = columns[0];
+      let bestScore = -1;
+
+      for(const col of columns){
+        let score = 0;
+        if(/fourth\s*id/i.test(col)) score += 120;
+        else if(/\bid\b|id$|^id|employee\s*id/i.test(col)) score += 45;
+
+        const sample = objects.slice(0, 250);
+        let nonEmpty = 0;
+        let numericLike = 0;
+        let matched = 0;
+
+        for(const row of sample){
+          const raw = row?.[col] ?? '';
+          const s = String(raw).trim();
+          if(!s) continue;
+          nonEmpty++;
+          if(/^\d+$/.test(normaliseId(s))) numericLike++;
+          const key = normaliseId(s);
+          if(key && keys.has(key)) matched++;
+        }
+
+        if(nonEmpty > 0){
+          score += (numericLike / nonEmpty) * 20;
+          score += (matched / nonEmpty) * 90;
+        }
+
+        if(score > bestScore){
+          bestScore = score;
+          bestCol = col;
+        }
+      }
+      return bestCol;
+    }
+
+    function normaliseId(val){
+      const keepDigits = byId('optKeepDigits')?.checked ?? true;
+      const stripZeros = byId('optStripZeros')?.checked ?? false;
+      const trimSpaces = byId('optTrimSpaces')?.checked ?? true;
+      let s = val == null ? '' : String(val);
+      if(trimSpaces) s = s.trim();
+      if(keepDigits){
+        let out='';
+        for(let i=0;i<s.length;i++){
+          const code = s.charCodeAt(i);
+          if(code>=48 && code<=57) out += s[i];
+        }
+        s = out;
+      }
+      if(stripZeros){
+        let j=0; while(j<s.length && s[j]==='0') j++;
+        s = s.slice(j);
+      }
+      return s;
+    }
+
+    function detectDelimiter(text){
+      const forced = byId('inputDelimiter').value;
+      if(forced !== 'auto') return forced;
+      const line = (text.split(/\r?\n/).find(l => l.trim().length) || '').trim();
+      const counts = {
+        ',': (line.match(/,/g)||[]).length,
+        '\t': (line.match(/\t/g)||[]).length,
+        ';': (line.match(/;/g)||[]).length,
+        '|': (line.match(/\|/g)||[]).length,
+      };
+      const best = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+      return best && best[1] > 0 ? best[0] : null;
+    }
+
+    function parseDelimited(text, delim){
+      const rows=[];
+      const lines = text.split(/\r?\n/).filter(l => l.length);
+      for(const ln of lines){
+        const parts = delim === '\t' ? ln.split(/\t/) : (delim ? ln.split(delim) : [ln]);
+        rows.push(parts.map(s => s.replace(/^\s+|\s+$/g,'')));
+      }
+      return rows;
+    }
+
+    function toObjects(rows){
+      if(!rows.length) return { columns: [], objects: [] };
+      const first = rows[0] || [];
+      const second = rows[1] || [];
+      let hasHeader = false;
+
+      if(first.length === 1){
+        hasHeader = /[A-Za-z]/.test(String(first[0] || '').trim()) && !/^\d+$/.test(normaliseId(first[0] || ''));
+      } else {
+        const firstLooksHeader = looksLikeHeaderRow(first);
+        const secondLooksHeader = looksLikeHeaderRow(second);
+        hasHeader = firstLooksHeader && !secondLooksHeader;
+      }
+
+      let columns, startIdx;
+      if(hasHeader && rows.length > 1){
+        columns = rows[0].map((c, i) => String(c || '').trim() || `Column ${i+1}`);
+        startIdx = 1;
+      }
+      else {
+        if((rows[0] || []).length <= 1) columns = ['FourthID'];
+        else columns = rows[0].map((_, i) => i === 0 ? 'FourthID' : `Column ${i+1}`);
+        startIdx = 0;
+      }
+
+      columns = columns
+        .map(c => c || 'FourthID')
+        .map((c,i,arr) => {
+          const count = arr.slice(0,i).filter(v => v === c).length;
+          return count > 0 ? `${c}_${count}` : c;
+        });
+
+      const objects=[];
+      for(let i=startIdx;i<rows.length;i++){
+        const row = rows[i];
+        const obj={};
+        for(let c=0;c<columns.length;c++) obj[columns[c]] = row[c] ?? '';
+        if(columns.length === 1 && !String(obj[columns[0]]||'').trim() && rows.length>1) continue;
+        objects.push(obj);
+      }
+      return { columns, objects };
+    }
+
+    function setSelectOptions(selectEl, options, selected){
+      selectEl.innerHTML = options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+      const choice = options.includes(selected) ? selected : (options[0] || '');
+      selectEl.value = choice;
+    }
+
+    function updateFourthColumnControlVisibility(){
+      const wrap = byId('inputFourthColWrap');
+      const grid = byId('inputControlsGrid');
+      const show = inputColumns.length > 1;
+      if(wrap) wrap.classList.toggle('hidden', !show);
+      if(grid){
+        grid.classList.toggle('md:grid-cols-2', show);
+        grid.classList.toggle('md:grid-cols-1', !show);
+      }
+    }
+
+    function renderInputPreview(){
+      const el = byId('inputPreview');
+      if(!inputRows.length){ el.textContent = ''; return; }
+      const sample = inputRows.slice(0,3).map(r => normaliseId(r[inputFourthKey] ?? '')).join(', ');
+      el.innerHTML = `<span class="font-medium">Input parsed:</span> ${inputRows.length} rows, ${inputColumns.length} columns. FourthID sample → [${escapeHtml(sample)}${inputRows.length>3?'...':''}]`;
+    }
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
+    }
+
+    byId('parseInputBtn').addEventListener('click', () => {
+      const text = byId('inputTextarea').value.trim();
+      if(!text){
+        inputRows = []; inputColumns = []; inputFourthKey = 'FourthID';
+        setSelectOptions(byId('inputFourthCol'), ['FourthID'], 'FourthID');
+        updateFourthColumnControlVisibility();
+        renderInputPreview();
+        updateEnrichReadiness();
+        return;
+      }
+      const delim = detectDelimiter(text);
+      const rows = parseDelimited(text, delim);
+      const { columns, objects } = toObjects(rows);
+      inputRows = objects;
+      inputColumns = columns.filter(Boolean);
+      const guess = guessFourthColumn(inputColumns.length ? inputColumns : ['FourthID'], inputRows);
+      setSelectOptions(byId('inputFourthCol'), inputColumns.length ? inputColumns : ['FourthID'], guess);
+      inputFourthKey = byId('inputFourthCol').value;
+      updateFourthColumnControlVisibility();
+      log(`Input parsed: ${inputRows.length} rows. Using '${inputFourthKey}' as match column.`, 'info');
+      renderInputPreview();
+      try{ updateEnrichButtons(); }catch(e){}
+    });
+
+    byId('inputFourthCol').addEventListener('change', e => {
+      inputFourthKey = e.target.value;
+      renderInputPreview();
+      updateEnrichReadiness();
+    });
+
+    byId('clearInputBtn').addEventListener('click', () => {
+      byId('inputTextarea').value = '';
+      inputRows = []; inputColumns = []; inputFourthKey = 'FourthID';
+      setSelectOptions(byId('inputFourthCol'), ['FourthID'], 'FourthID');
+      updateFourthColumnControlVisibility();
+      renderInputPreview();
+      setEnrichStateEmpty();
+      try{ updateEnrichButtons(); }catch(e){}
+    });
+
+    function setEnrichStateEmpty(){
+      enrichMatched = [];
+      enrichInputMissed = [];
+      enrichMatrixMissed = [];
+      byId('countMatched').textContent = '0';
+      byId('countInputMissed').textContent = '0';
+      byId('countMatrixMissed').textContent = '0';
+      byId('enrichInfo').textContent = '';
+      byId('downloadEnrichXlsxBtn').disabled = true;
+      renderResultUI('matched');
+      updateEnrichPreviewVisibility();
+    }
+
+    function buildMatrixLookupMap(){
+      const map = new Map();
+      const add = (rawKey, row) => {
+        const key = normaliseId(rawKey ?? '');
+        if(key && !map.has(key)) map.set(key, row);
+      };
+      for(const r of matrixRows){
+        add(r.FourthID, r);
+        add(r.RotaCloudID, r);
+      }
+      return map;
+    }
+
+    function composeEnrichedRow(inputRow, matchedMatrixRow){
+      // Output order requested: RotaCloudID, FourthIDInput, FourthIDOutput, Hours, Group, Location, Employee, Notes, then day columns
+      const out = {
+        RotaCloudID: matchedMatrixRow?.RotaCloudID ?? '',
+        FourthIDInput: inputRow?.[inputFourthKey] ?? '',
+        FourthIDOutput: matchedMatrixRow?.FourthID ?? '',
+        Hours: matchedMatrixRow?.Hours ?? '',
+        Group: matchedMatrixRow?.Group ?? '',
+        Location: matchedMatrixRow?.Location ?? '',
+        Employee: matchedMatrixRow?.Employee ?? '',
+        Notes: matchedMatrixRow?.Notes ?? '',
+      };
+      for(const k of dayKeys) out[k] = matchedMatrixRow?.[k] ?? '';
+      return out;
+    }
+
+    byId('runEnrichBtn').addEventListener('click', () => {
+      if(!matrixRows.length){ alert('Please process or upload a matrix first.'); setStep('load'); return; }
+      if(!inputRows.length){ alert('Please parse your input first.'); return; }
+
+      // 1) prepare input rows (dedup)
+      const dedup = byId('optDedup')?.checked ?? true;
+      let inRows = inputRows;
+      if(dedup){
+        const seen = new Set();
+        inRows = inputRows.filter(r => {
+          const k = normaliseId(r[inputFourthKey] ?? '');
+          if(!k) return true; // keep blanks
+          if(seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
+
+      const lookup = buildMatrixLookupMap();
+      const matchedMatrixRecords = new Set();
+
+      enrichMatched = [];
+      enrichInputMissed = [];
+
+      let found = 0;
+      for(const r of inRows){
+        const raw = r[inputFourthKey] ?? '';
+        const keyN = normaliseId(raw);
+        const match = lookup.get(keyN);
+        if(keyN && match){
+          found++;
+          matchedMatrixRecords.add(match);
+          enrichMatched.push(composeEnrichedRow(r, match));
+        } else {
+          enrichInputMissed.push(r);
+          enrichMatched.push(composeEnrichedRow(r, null));
+        }
+      }
+
+      // Matrix missed: rows never matched
+      enrichMatrixMissed = matrixRows.filter(r => {
+        const k = normaliseId(r.FourthID ?? '');
+        return k && !matchedMatrixRecords.has(r);
+      });
+
+      // Optional: append matrix missed into matched output
+      const append = byId('optAppendUploadMissed')?.checked ?? false;
+      if(append && enrichMatrixMissed.length){
+        for(const m of enrichMatrixMissed){
+          const blankInput = { [inputFourthKey]: '' };
+          enrichMatched.push(composeEnrichedRow(blankInput, m));
+        }
+      }
+
+      byId('countMatched').textContent = String(found);
+      byId('countInputMissed').textContent = String(enrichInputMissed.length);
+      byId('countMatrixMissed').textContent = String(enrichMatrixMissed.length);
+
+      byId('enrichInfo').textContent = `${inRows.length} rows processed. Matched: ${found}. Input not matched: ${enrichInputMissed.length}. Matrix not used: ${enrichMatrixMissed.length}.`;
+
+      // Default tab
+      let defaultTab = 'matched';
+      if(found === 0) defaultTab = enrichInputMissed.length ? 'input-missed' : 'matrix-missed';
+      renderResultUI(defaultTab);
+      updateEnrichPreviewVisibility();
+
+      byId('downloadEnrichXlsxBtn').disabled = !(enrichMatched.length || enrichInputMissed.length || enrichMatrixMissed.length);
+
+      if(found === 0){
+        log('No matches found. Check FourthID column selection or normalization toggles.', 'warn');
+      }
+    });
+
+    // Tabs
+    function renderTable(rows){
+      const thead = byId('resultTable').querySelector('thead');
+      const tbody = byId('resultTable').querySelector('tbody');
+      if(!rows || !rows.length){
+        thead.innerHTML = '';
+        tbody.innerHTML = `<tr><td colspan="100" class="text-center p-8 text-slate-500 dark:text-slate-400">No data to display in this view.</td></tr>`;
+        return;
+      }
+      const columns = Object.keys(rows[0]);
+      thead.innerHTML = `<tr>${columns.map(c=>`<th class="text-left p-3 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 sticky top-0 font-semibold">${escapeHtml(c)}</th>`).join('')}</tr>`;
+      tbody.innerHTML = rows.map(r => `<tr>${columns.map(c=>`<td class="p-3 border-b border-slate-100 dark:border-slate-700">${escapeHtml(String(r[c] ?? ''))}</td>`).join('')}</tr>`).join('');
+    }
+
+    function renderResultUI(tabName){
+      const allTabs = document.querySelectorAll('#resultTabs [data-tab]');
+      allTabs.forEach(btn => {
+        btn.setAttribute('aria-selected', btn.dataset.tab === tabName ? 'true' : 'false');
+      });
+
+      let rowsToRender = [];
+      if(tabName === 'matched'){
+        rowsToRender = enrichMatched;
+      } else if(tabName === 'input-missed'){
+        rowsToRender = enrichInputMissed.map(r => {
+          const out = {};
+          for(const c of inputColumns) out[c] = r[c] ?? '';
+          return out;
+        });
+      } else {
+        // matrix-missed
+        rowsToRender = enrichMatrixMissed.map(m => {
+          const out = { RotaCloudID: m.RotaCloudID ?? '', FourthID: m.FourthID ?? '', Employee: m.Employee ?? '', Group: m.Group ?? '', Location: m.Location ?? '', Hours: m.Hours ?? '', Notes: m.Notes ?? '' };
+          for(const k of dayKeys) out[k] = m[k] ?? '';
+          return out;
+        });
+      }
+      renderTable(rowsToRender);
+    }
+
+    document.querySelectorAll('#resultTabs [data-tab]').forEach(btn => {
+      btn.addEventListener('click', (e) => renderResultUI(e.currentTarget.dataset.tab));
+    });
+
+    function downloadEnrichXlsx(){
+      const wb = XLSX.utils.book_new();
+
+      if(enrichMatched.length){
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(enrichMatched), 'Enriched (Matched)');
+      }
+
+      if(enrichInputMissed.length){
+        const clean = enrichInputMissed.map(r => {
+          const out = {}; for(const c of inputColumns) out[c] = r[c] ?? ''; return out;
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clean), 'Input Missed');
+      }
+
+      if(enrichMatrixMissed.length){
+        const clean = enrichMatrixMissed.map(m => {
+          const out = { RotaCloudID: m.RotaCloudID ?? '', FourthID: m.FourthID ?? '', Employee: m.Employee ?? '', Group: m.Group ?? '', Location: m.Location ?? '', Hours: m.Hours ?? '', Notes: m.Notes ?? '' };
+          for(const k of dayKeys) out[k] = m[k] ?? ''; return out;
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clean), 'Matrix Missed');
+      }
+
+      if(wb.SheetNames.length === 0){ alert('No data generated to download.'); return; }
+
+      const wsDate = currentWeekStart ? currentWeekStart.toLocaleDateString('en-GB').replace(/\//g,'-') : new Date().toISOString().slice(0,10);
+      const fname = `enrich_report_week${currentWeekStart ? getWeekNumber(currentWeekStart) : ''}_${wsDate}.xlsx`;
+      XLSX.writeFile(wb, fname);
+    }
+
+    byId('downloadEnrichXlsxBtn').addEventListener('click', downloadEnrichXlsx);
+
+    // Initialise result UI
+    renderResultUI('matched');
+    updateEnrichPreviewVisibility();
+    updateEnrichReadiness();
   </script>
 </body>
 </html>
