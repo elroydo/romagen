@@ -323,6 +323,17 @@
                   </div>
                 </label>
 
+                <div id="appendGroupFilterWrap" class="hidden rounded-xl border border-slate-200 p-3 bg-slate-50 dark:bg-slate-900 dark:border-slate-700 sm:col-span-2 space-y-3">
+                  <div class="flex items-center justify-between gap-2">
+                    <p class="text-xs font-medium text-slate-700 dark:text-slate-300">Append only selected groups</p>
+                    <div class="flex items-center gap-2">
+                      <button id="selectAllAppendGroupsBtn" type="button" class="text-xs px-2 py-1 rounded-lg bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700">All</button>
+                      <button id="clearAppendGroupsBtn" type="button" class="text-xs px-2 py-1 rounded-lg bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700">None</button>
+                    </div>
+                  </div>
+                  <div id="appendGroupFilterList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+                </div>
+
               </div>
               <div id="enrichInfo" class="text-sm text-slate-600 dark:text-slate-400"></div>
 
@@ -376,9 +387,9 @@
         </div>
       </div>
 
-      <footer class="text-xs text-slate-500 dark:text-slate-500 pt-2 pb-8">
-        <p class="mb-1">Disclaimer. Experimental. Data is processed locally. Validate before use.</p>
-        <p>Romagen v2.0 • © 2026</p>
+      <footer class="text-xs text-center text-slate-500 dark:text-slate-500 pt-2 pb-8">
+        <p class="mb-1">Experimental. Data is processed locally. Validate before use.</p>
+        <p>Romagen v2.3 • © 2026</p>
       </footer>
 
     </section>
@@ -542,6 +553,7 @@
       matrixRows = [];
       generatedMatrixRows = [];
       matrixSource = 'generated';
+      try{ if(typeof setEnrichStateEmpty === 'function') setEnrichStateEmpty(); }catch(e){}
       mainFileStatus.textContent = '';
       mainFileStatusWrap.classList.add('hidden');
       drop.classList.remove('file-loaded');
@@ -944,6 +956,7 @@
         matrixRows = buildMatrix(parsedRows, leaveRows);
         generatedMatrixRows = matrixRows.map(r => ({ ...r }));
         matrixSource = 'generated';
+        try{ if(typeof setEnrichStateEmpty === 'function') setEnrichStateEmpty(); }catch(e){}
         log(`Matrix ready. ${matrixRows.length} employees processed.`, 'info');
         renderMatrixPreview(matrixRows);
         setButtons();
@@ -977,6 +990,8 @@
     let enrichMatched = [];
     let enrichInputMissed = [];
     let enrichMatrixMissed = [];
+    let selectedAppendGroups = new Set();
+    let appendGroupsInitialised = false;
 
     function updateEnrichPreviewVisibility(){
       const hasEnrichRows = (enrichMatched.length + enrichInputMissed.length + enrichMatrixMissed.length) > 0;
@@ -992,6 +1007,63 @@
     const clearMatrixUploadBtn = byId('clearMatrixUploadBtn');
     const useGeneratedMatrixBtn = byId('useGeneratedMatrixBtn');
     const enrichActionHint = byId('enrichActionHint');
+    const appendGroupFilterWrap = byId('appendGroupFilterWrap');
+    const appendGroupFilterList = byId('appendGroupFilterList');
+    const selectAllAppendGroupsBtn = byId('selectAllAppendGroupsBtn');
+    const clearAppendGroupsBtn = byId('clearAppendGroupsBtn');
+    const optAppendUploadMissed = byId('optAppendUploadMissed');
+
+    function normaliseGroupValue(v){
+      const raw = String(v ?? '').trim();
+      return raw || 'Ungrouped';
+    }
+
+    function distinctMatrixMissedGroups(){
+      const groups = new Set();
+      for(const row of enrichMatrixMissed){
+        groups.add(normaliseGroupValue(row?.Group));
+      }
+      return Array.from(groups).sort((a,b) => a.localeCompare(b));
+    }
+
+    function updateAppendGroupPanelVisibility(){
+      if(!appendGroupFilterWrap) return;
+      const canShow = !!optAppendUploadMissed?.checked;
+      appendGroupFilterWrap.classList.toggle('hidden', !canShow);
+    }
+
+    function renderAppendGroupFilters(){
+      if(!appendGroupFilterList) return;
+      const groups = distinctMatrixMissedGroups();
+
+      if(!groups.length){
+        selectedAppendGroups = new Set();
+        appendGroupsInitialised = false;
+        appendGroupFilterList.innerHTML = '<p class="text-xs text-slate-500 dark:text-slate-400">No Matrix Not Used groups yet. Run Enrich first.</p>';
+        updateAppendGroupPanelVisibility();
+        return;
+      }
+
+      if(!appendGroupsInitialised){
+        selectedAppendGroups = new Set();
+        appendGroupsInitialised = true;
+      } else {
+        selectedAppendGroups = new Set(groups.filter(g => selectedAppendGroups.has(g)));
+      }
+
+      appendGroupFilterList.innerHTML = groups.map(group => {
+        const checked = selectedAppendGroups.has(group) ? 'checked' : '';
+        return `<label class="flex items-center cursor-pointer select-none justify-between rounded-lg border border-slate-200 px-2 py-1.5 bg-white dark:bg-slate-800 dark:border-slate-700"><span class="truncate text-xs">${escapeHtml(group)}</span><div class="relative shrink-0"><input class="append-group-checkbox sr-only" type="checkbox" value="${escapeHtml(group)}" ${checked}><div class="block bg-slate-300 dark:bg-slate-600 w-9 h-5 rounded-full transition-colors duration-200"></div><div class="dot absolute left-1 top-0.5 bg-white dark:bg-slate-300 w-4 h-4 rounded-full transition-transform duration-200"></div></div></label>`;
+      }).join('');
+
+      updateAppendGroupPanelVisibility();
+    }
+
+    function readSelectedAppendGroupsFromUI(){
+      if(!appendGroupFilterList) return new Set();
+      const checked = appendGroupFilterList.querySelectorAll('.append-group-checkbox:checked');
+      return new Set(Array.from(checked).map(el => normaliseGroupValue(el.value)));
+    }
 
     function updateUseGeneratedMatrixAction(){
       if(!useGeneratedMatrixBtn) return;
@@ -1002,6 +1074,7 @@
 
     function updateEnrichReadiness(){
       updateUseGeneratedMatrixAction();
+      renderAppendGroupFilters();
       const matrixReady = matrixRows.length > 0;
       const inputParsed = inputRows.length > 0;
 
@@ -1083,6 +1156,7 @@
       }
       matrixRows = generatedMatrixRows.map(r => ({ ...r }));
       matrixSource = 'generated';
+      setEnrichStateEmpty();
       renderMatrixPreview(matrixRows);
       weekBanner.textContent = getGeneratedWeekBanner();
       if(matrixDrop) matrixDrop.classList.remove('file-loaded');
@@ -1100,6 +1174,7 @@
       }
       matrixRows = rows;
       matrixSource = 'uploaded';
+      setEnrichStateEmpty();
       renderMatrixPreview(matrixRows);
       weekBanner.textContent = 'Manual matrix uploaded from Enrich tab.';
       matrixUploadStatus.textContent = `${fileName} (${rows.length} rows)`;
@@ -1165,6 +1240,7 @@
 
       matrixRows = [];
       matrixSource = 'generated';
+      setEnrichStateEmpty();
       weekBanner.textContent = '';
       prevThead.innerHTML = '';
       prevTbody.innerHTML = '';
@@ -1182,6 +1258,31 @@
     matrixDrop?.addEventListener('drop', e => handleMatrixUpload(e.dataTransfer.files[0]));
     clearMatrixUploadBtn?.addEventListener('click', clearUploadedMatrix);
     useGeneratedMatrixBtn?.addEventListener('click', () => useGeneratedMatrix(true));
+    optAppendUploadMissed?.addEventListener('change', () => {
+      if(optAppendUploadMissed.checked){
+        selectedAppendGroups = new Set();
+        appendGroupsInitialised = true;
+      }
+      renderAppendGroupFilters();
+      updateAppendGroupPanelVisibility();
+    });
+    appendGroupFilterList?.addEventListener('change', (e) => {
+      const target = e.target;
+      if(!(target instanceof HTMLInputElement)) return;
+      if(!target.classList.contains('append-group-checkbox')) return;
+      selectedAppendGroups = readSelectedAppendGroupsFromUI();
+    });
+    selectAllAppendGroupsBtn?.addEventListener('click', () => {
+      selectedAppendGroups = new Set(distinctMatrixMissedGroups());
+      appendGroupsInitialised = true;
+      renderAppendGroupFilters();
+    });
+    clearAppendGroupsBtn?.addEventListener('click', () => {
+      selectedAppendGroups = new Set();
+      appendGroupsInitialised = true;
+      if(!appendGroupFilterList) return;
+      appendGroupFilterList.querySelectorAll('.append-group-checkbox').forEach(el => { el.checked = false; });
+    });
 
     function updateEnrichButtons(){
       const runBtn = byId('runEnrichBtn');
@@ -1263,6 +1364,20 @@
       const trimSpaces = byId('optTrimSpaces')?.checked ?? true;
       let s = val == null ? '' : String(val);
       if(trimSpaces) s = s.trim();
+
+      // Excel-style integer IDs may arrive as decimal strings (e.g. 4194.00 or 4194,00).
+      // When the fractional part is only zeros, keep the integer part for matching.
+      const decimalLike = s.match(/^([+-]?\d+)[\.,](\d+)$/);
+      if(decimalLike && /^0+$/.test(decimalLike[2])){
+        s = decimalLike[1];
+      }
+
+      // Also handle scientific notation when it represents an integer (e.g. 1.1115963E+7).
+      if(/^[+-]?\d+(\.\d+)?[eE][+-]?\d+$/.test(s)){
+        const n = Number(s);
+        if(Number.isFinite(n) && Number.isInteger(n)) s = String(n);
+      }
+
       if(keepDigits){
         let out='';
         for(let i=0;i<s.length;i++){
@@ -1380,6 +1495,7 @@
         setSelectOptions(byId('inputFourthCol'), ['FourthID'], 'FourthID');
         updateFourthColumnControlVisibility();
         renderInputPreview();
+        setEnrichStateEmpty();
         updateEnrichReadiness();
         return;
       }
@@ -1392,6 +1508,7 @@
       setSelectOptions(byId('inputFourthCol'), inputColumns.length ? inputColumns : ['FourthID'], guess);
       inputFourthKey = byId('inputFourthCol').value;
       updateFourthColumnControlVisibility();
+      setEnrichStateEmpty();
       log(`Input parsed: ${inputRows.length} rows. Using '${inputFourthKey}' as match column.`, 'info');
       renderInputPreview();
       try{ updateEnrichButtons(); }catch(e){}
@@ -1417,20 +1534,41 @@
       enrichMatched = [];
       enrichInputMissed = [];
       enrichMatrixMissed = [];
+      selectedAppendGroups = new Set();
+      appendGroupsInitialised = false;
       byId('countMatched').textContent = '0';
       byId('countInputMissed').textContent = '0';
       byId('countMatrixMissed').textContent = '0';
       byId('enrichInfo').textContent = '';
       byId('downloadEnrichXlsxBtn').disabled = true;
       renderResultUI('matched');
+      renderAppendGroupFilters();
       updateEnrichPreviewVisibility();
     }
 
     function buildMatrixLookupMap(){
       const map = new Map();
       const add = (rawKey, row) => {
-        const key = normaliseId(rawKey ?? '');
-        if(key && !map.has(key)) map.set(key, row);
+        const raw = String(rawKey ?? '').trim();
+        if(!raw) return;
+
+        const candidates = new Set();
+        candidates.add(raw);
+
+        const normalized = normaliseId(raw);
+        if(normalized) candidates.add(normalized);
+
+        const digitsOnly = raw.replace(/\D/g, '');
+        if(digitsOnly){
+          candidates.add(digitsOnly);
+          if(byId('optStripZeros')?.checked ?? false){
+            candidates.add(digitsOnly.replace(/^0+/, ''));
+          }
+        }
+
+        for(const key of candidates){
+          if(key && !map.has(key)) map.set(key, row);
+        }
       };
       for(const r of matrixRows){
         add(r.FourthID, r);
@@ -1482,9 +1620,30 @@
       let found = 0;
       for(const r of inRows){
         const raw = r[inputFourthKey] ?? '';
-        const keyN = normaliseId(raw);
-        const match = lookup.get(keyN);
-        if(keyN && match){
+        const rawTrim = String(raw ?? '').trim();
+        const keyN = normaliseId(rawTrim);
+
+        const candidateKeys = [];
+        if(keyN) candidateKeys.push(keyN);
+        if(rawTrim) candidateKeys.push(rawTrim);
+
+        const digitsOnly = rawTrim.replace(/\D/g, '');
+        if(digitsOnly) candidateKeys.push(digitsOnly);
+        if((byId('optStripZeros')?.checked ?? false) && digitsOnly){
+          candidateKeys.push(digitsOnly.replace(/^0+/, ''));
+        }
+
+        let match = null;
+        for(const key of candidateKeys){
+          if(!key) continue;
+          const hit = lookup.get(key);
+          if(hit){
+            match = hit;
+            break;
+          }
+        }
+
+        if(match && (keyN || rawTrim)){
           found++;
           matchedMatrixRecords.add(match);
           enrichMatched.push(composeEnrichedRow(r, match));
@@ -1496,16 +1655,23 @@
 
       // Matrix missed: rows never matched
       enrichMatrixMissed = matrixRows.filter(r => {
-        const k = normaliseId(r.FourthID ?? '');
-        return k && !matchedMatrixRecords.has(r);
+        return !matchedMatrixRecords.has(r);
       });
+
+      // Refresh selectable append groups from current Matrix Not Used rows
+      renderAppendGroupFilters();
 
       // Optional: append matrix missed into matched output
       const append = byId('optAppendUploadMissed')?.checked ?? false;
       if(append && enrichMatrixMissed.length){
+        const appendGroupSet = readSelectedAppendGroupsFromUI();
         for(const m of enrichMatrixMissed){
+          const rowGroup = normaliseGroupValue(m?.Group);
+          if(!appendGroupSet.has(rowGroup)) continue;
           const blankInput = { [inputFourthKey]: '' };
-          enrichMatched.push(composeEnrichedRow(blankInput, m));
+          const appendedRow = composeEnrichedRow(blankInput, m);
+          Object.defineProperty(appendedRow, '__appended', { value: true, enumerable: false });
+          enrichMatched.push(appendedRow);
         }
       }
 
@@ -1539,7 +1705,17 @@
       }
       const columns = Object.keys(rows[0]);
       thead.innerHTML = `<tr>${columns.map(c=>`<th class="text-left p-3 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 sticky top-0 font-semibold">${escapeHtml(c)}</th>`).join('')}</tr>`;
-      tbody.innerHTML = rows.map(r => `<tr>${columns.map(c=>`<td class="p-3 border-b border-slate-100 dark:border-slate-700">${escapeHtml(String(r[c] ?? ''))}</td>`).join('')}</tr>`).join('');
+      tbody.innerHTML = rows.map(r => {
+        const isAppended = !!r.__appended;
+        const trClass = isAppended ? 'bg-slate-50/70 dark:bg-slate-800/40' : '';
+        return `<tr class="${trClass}">${columns.map((c, idx) => {
+          const cellValue = escapeHtml(String(r[c] ?? ''));
+          const appendedTag = (isAppended && idx === 0)
+            ? `<span class="ml-2 align-middle text-[10px] px-1.5 py-0.5 rounded-md border border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-400">a</span>`
+            : '';
+          return `<td class="p-3 border-b border-slate-100 dark:border-slate-700">${cellValue}${appendedTag}</td>`;
+        }).join('')}</tr>`;
+      }).join('');
     }
 
     function renderResultUI(tabName){
